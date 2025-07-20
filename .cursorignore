@@ -1,0 +1,4 @@
+# lib/
+# node_modules/
+# !node_modules/playwright/**
+# !node_modules/playwright-core/**
