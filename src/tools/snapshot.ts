@@ -179,20 +179,21 @@ const selectOption = defineTool({
   },
 });
 
-
-const inspectElementSchema = z.union([
-  elementSchema,
-  z.object({
-    elements: z.array(elementSchema).describe('Array of elements to inspect in batch'),
-  })
-]);
+const inspectElementSchema = z.object({
+  element: z.string().describe('Human-readable element description used to obtain permission to interact with the element'),
+  ref: z.string().describe('Exact target element reference from the page snapshot'),
+  batch: z.array(z.object({
+    element: z.string().describe('Human-readable element description used to obtain permission to interact with the element'),
+    ref: z.string().describe('Exact target element reference from the page snapshot'),
+  })).optional().describe('Optional array of additional elements to inspect in batch'),
+});
 
 const inspectElement = defineTool({
   capability: 'core',
   schema: {
     name: 'browser_inspect_element',
     title: 'Inspect element',
-    description: 'Reveal the selector and DOM tree details of an internal reference. Can inspect a single element or multiple elements in batch.',
+    description: 'Reveal the selector and DOM tree details of an internal reference. Can inspect a single element or multiple elements in batch using the batch parameter.',
     inputSchema: inspectElementSchema,
     type: 'readOnly',
   },
@@ -202,7 +203,7 @@ const inspectElement = defineTool({
     const snapshot = tab.snapshotOrDie();
     
     // Handle both single element and batch requests
-    const elementsToInspect = 'elements' in params ? params.elements : [params];
+    const elementsToInspect = [params, ...(params.batch || [])];
     
     const codePromises = elementsToInspect.map(async (element, index) => [
       `const element${index} = page.${await generateLocator(snapshot.refLocator(element))};`,
@@ -375,4 +376,5 @@ export default [
   drag,
   hover,
   selectOption,
+  inspectElement,
 ];
