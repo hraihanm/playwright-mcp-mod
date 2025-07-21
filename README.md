@@ -1,370 +1,54 @@
 ## Playwright MCP
 
-A Model Context Protocol (MCP) server that provides browser automation capabilities using [Playwright](https://playwright.dev). This server enables LLMs to interact with web pages through structured accessibility snapshots, bypassing the need for screenshots or visually-tuned models.
-
-### Key Features
-
-- **Fast and lightweight**. Uses Playwright's accessibility tree, not pixel-based input.
-- **LLM-friendly**. No vision models needed, operates purely on structured data.
-- **Deterministic tool application**. Avoids ambiguity common with screenshot-based approaches.
-
-### Requirements
-- Node.js 18 or newer
-- VS Code, Cursor, Windsurf, Claude Desktop, Goose or any other MCP client
-
-<!--
-// Generate using:
-node utils/generate-links.js
--->
-
-### Getting started
-
-First, install the Playwright MCP server with your client.
-
-**Standard config** works in most of the tools:
-
-```js
-{
-  "mcpServers": {
-    "playwright": {
-      "command": "npx",
-      "args": [
-        "@playwright/mcp@latest"
-      ]
-    }
-  }
-}
-```
-
-[<img src="https://img.shields.io/badge/VS_Code-VS_Code?style=flat-square&label=Install%20Server&color=0098FF" alt="Install in VS Code">](https://insiders.vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522playwright%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522%2540playwright%252Fmcp%2540latest%2522%255D%257D) [<img alt="Install in VS Code Insiders" src="https://img.shields.io/badge/VS_Code_Insiders-VS_Code_Insiders?style=flat-square&label=Install%20Server&color=24bfa5">](https://insiders.vscode.dev/redirect?url=vscode-insiders%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522playwright%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522%2540playwright%252Fmcp%2540latest%2522%255D%257D)
-
-
-<details>
-<summary>Claude Code</summary>
-
-Use the Claude Code CLI to add the Playwright MCP server:
-
-```bash
-claude mcp add playwright npx @playwright/mcp@latest
-```
-</details>
-
-<details>
-<summary>Claude Desktop</summary>
-
-Follow the MCP install [guide](https://modelcontextprotocol.io/quickstart/user), use the standard config above.
-
-</details>
-
-<details>
-<summary>Cursor</summary>
-
-#### Click the button to install:
-
-[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=playwright&config=eyJjb21tYW5kIjoibnB4IEBwbGF5d3JpZ2h0L21jcEBsYXRlc3QifQ%3D%3D)
-
-#### Or install manually:
-
-Go to `Cursor Settings` -> `MCP` -> `Add new MCP Server`. Name to your liking, use `command` type with the command `npx @playwright/mcp`. You can also verify config or add command like arguments via clicking `Edit`.
-
-</details>
-
-<details>
-<summary>Gemini CLI</summary>
-
-Follow the MCP install [guide](https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md#configure-the-mcp-server-in-settingsjson), use the standard config above.
-
-</details>
-
-<details>
-<summary>Goose</summary>
-
-#### Click the button to install:
-
-[![Install in Goose](https://block.github.io/goose/img/extension-install-dark.svg)](https://block.github.io/goose/extension?cmd=npx&arg=%40playwright%2Fmcp%40latest&id=playwright&name=Playwright&description=Interact%20with%20web%20pages%20through%20structured%20accessibility%20snapshots%20using%20Playwright)
-
-#### Or install manually:
-
-Go to `Advanced settings` -> `Extensions` -> `Add custom extension`. Name to your liking, use type `STDIO`, and set the `command` to `npx @playwright/mcp`. Click "Add Extension".
-</details>
-
-<details>
-<summary>Qodo Gen</summary>
-
-Open [Qodo Gen](https://docs.qodo.ai/qodo-documentation/qodo-gen) chat panel in VSCode or IntelliJ → Connect more tools → + Add new MCP → Paste the standard config above.
-
-Click <code>Save</code>.
-</details>
-
-<details>
-<summary>VS Code</summary>
-
-#### Click the button to install:
-
-[<img src="https://img.shields.io/badge/VS_Code-VS_Code?style=flat-square&label=Install%20Server&color=0098FF" alt="Install in VS Code">](https://insiders.vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522playwright%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522%2540playwright%252Fmcp%2540latest%2522%255D%257D) [<img alt="Install in VS Code Insiders" src="https://img.shields.io/badge/VS_Code_Insiders-VS_Code_Insiders?style=flat-square&label=Install%20Server&color=24bfa5">](https://insiders.vscode.dev/redirect?url=vscode-insiders%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522playwright%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522%2540playwright%252Fmcp%2540latest%2522%255D%257D)
-
-#### Or install manually:
-
-Follow the MCP install [guide](https://code.visualstudio.com/docs/copilot/chat/mcp-servers#_add-an-mcp-server), use the standard config above. You can also install the Playwright MCP server using the VS Code CLI:
-
-```bash
-# For VS Code
-code --add-mcp '{"name":"playwright","command":"npx","args":["@playwright/mcp@latest"]}'
-```
-
-After installation, the Playwright MCP server will be available for use with your GitHub Copilot agent in VS Code.
-</details>
-
-<details>
-<summary>Windsurf</summary>
-
-Follow Windsurf MCP [documentation](https://docs.windsurf.com/windsurf/cascade/mcp). Use the standard config above.
-
-</details>
-
-### Configuration
-
-Playwright MCP server supports following arguments. They can be provided in the JSON configuration above, as a part of the `"args"` list:
-
-<!--- Options generated by update-readme.js -->
-
-```
-> npx @playwright/mcp@latest --help
-  --allowed-origins <origins>  semicolon-separated list of origins to allow the
-                               browser to request. Default is to allow all.
-  --blocked-origins <origins>  semicolon-separated list of origins to block the
-                               browser from requesting. Blocklist is evaluated
-                               before allowlist. If used without the allowlist,
-                               requests not matching the blocklist are still
-                               allowed.
-  --block-service-workers      block service workers
-  --browser <browser>          browser or chrome channel to use, possible
-                               values: chrome, firefox, webkit, msedge.
-  --caps <caps>                comma-separated list of additional capabilities
-                               to enable, possible values: vision, pdf.
-  --cdp-endpoint <endpoint>    CDP endpoint to connect to.
-  --config <path>              path to the configuration file.
-  --device <device>            device to emulate, for example: "iPhone 15"
-  --executable-path <path>     path to the browser executable.
-  --headless                   run browser in headless mode, headed by default
-  --host <host>                host to bind server to. Default is localhost. Use
-                               0.0.0.0 to bind to all interfaces.
-  --ignore-https-errors        ignore https errors
-  --isolated                   keep the browser profile in memory, do not save
-                               it to disk.
-  --image-responses <mode>     whether to send image responses to the client.
-                               Can be "allow" or "omit", Defaults to "allow".
-  --no-sandbox                 disable the sandbox for all process types that
-                               are normally sandboxed.
-  --output-dir <path>          path to the directory for output files.
-  --port <port>                port to listen on for SSE transport.
-  --proxy-bypass <bypass>      comma-separated domains to bypass proxy, for
-                               example ".com,chromium.org,.domain.com"
-  --proxy-server <proxy>       specify proxy server, for example
-                               "http://myproxy:3128" or "socks5://myproxy:8080"
-  --save-trace                 Whether to save the Playwright Trace of the
-                               session into the output directory.
-  --storage-state <path>       path to the storage state file for isolated
-                               sessions.
-  --user-agent <ua string>     specify user agent string
-  --user-data-dir <path>       path to the user data directory. If not
-                               specified, a temporary directory will be created.
-  --viewport-size <size>       specify browser viewport size in pixels, for
-                               example "1280, 720"
-```
-
-<!--- End of options generated section -->
-
-### User profile
-
-You can run Playwright MCP with persistent profile like a regular browser (default), or in the isolated contexts for the testing sessions.
-
-**Persistent profile**
-
-All the logged in information will be stored in the persistent profile, you can delete it between sessions if you'd like to clear the offline state.
-Persistent profile is located at the following locations and you can override it with the `--user-data-dir` argument.
-
-```bash
-# Windows
-%USERPROFILE%\AppData\Local\ms-playwright\mcp-{channel}-profile
-
-# macOS
-- ~/Library/Caches/ms-playwright/mcp-{channel}-profile
-
-# Linux
-- ~/.cache/ms-playwright/mcp-{channel}-profile
-```
-
-**Isolated**
-
-In the isolated mode, each session is started in the isolated profile. Every time you ask MCP to close the browser,
-the session is closed and all the storage state for this session is lost. You can provide initial storage state
-to the browser via the config's `contextOptions` or via the `--storage-state` argument. Learn more about the storage
-state [here](https://playwright.dev/docs/auth).
-
-```js
-{
-  "mcpServers": {
-    "playwright": {
-      "command": "npx",
-      "args": [
-        "@playwright/mcp@latest",
-        "--isolated",
-        "--storage-state={path/to/storage.json}"
-      ]
-    }
-  }
-}
-```
-
-### Configuration file
-
-The Playwright MCP server can be configured using a JSON configuration file. You can specify the configuration file
-using the `--config` command line option:
-
-```bash
-npx @playwright/mcp@latest --config path/to/config.json
-```
-
-<details>
-<summary>Configuration file schema</summary>
-
-```typescript
-{
-  // Browser configuration
-  browser?: {
-    // Browser type to use (chromium, firefox, or webkit)
-    browserName?: 'chromium' | 'firefox' | 'webkit';
-
-    // Keep the browser profile in memory, do not save it to disk.
-    isolated?: boolean;
-
-    // Path to user data directory for browser profile persistence
-    userDataDir?: string;
-
-    // Browser launch options (see Playwright docs)
-    // @see https://playwright.dev/docs/api/class-browsertype#browser-type-launch
-    launchOptions?: {
-      channel?: string;        // Browser channel (e.g. 'chrome')
-      headless?: boolean;      // Run in headless mode
-      executablePath?: string; // Path to browser executable
-      // ... other Playwright launch options
-    };
-
-    // Browser context options
-    // @see https://playwright.dev/docs/api/class-browser#browser-new-context
-    contextOptions?: {
-      viewport?: { width: number, height: number };
-      // ... other Playwright context options
-    };
-
-    // CDP endpoint for connecting to existing browser
-    cdpEndpoint?: string;
-
-    // Remote Playwright server endpoint
-    remoteEndpoint?: string;
-  },
-
-  // Server configuration
-  server?: {
-    port?: number;  // Port to listen on
-    host?: string;  // Host to bind to (default: localhost)
-  },
-
-  // List of additional capabilities
-  capabilities?: Array<
-    'tabs' |    // Tab management
-    'install' | // Browser installation
-    'pdf' |     // PDF generation
-    'vision' |  // Coordinate-based interactions
-  >;
-
-  // Directory for output files
-  outputDir?: string;
-
-  // Network configuration
-  network?: {
-    // List of origins to allow the browser to request. Default is to allow all. Origins matching both `allowedOrigins` and `blockedOrigins` will be blocked.
-    allowedOrigins?: string[];
-
-    // List of origins to block the browser to request. Origins matching both `allowedOrigins` and `blockedOrigins` will be blocked.
-    blockedOrigins?: string[];
-  };
- 
-  /**
-   * Whether to send image responses to the client. Can be "allow" or "omit". 
-   * Defaults to "allow".
-   */
-  imageResponses?: 'allow' | 'omit';
-}
-```
-</details>
-
-### Standalone MCP server
-
-When running headed browser on system w/o display or from worker processes of the IDEs,
-run the MCP server from environment with the DISPLAY and pass the `--port` flag to enable HTTP transport.
-
-```bash
-npx @playwright/mcp@latest --port 8931
-```
-
-And then in MCP client config, set the `url` to the HTTP endpoint:
-
-```js
-{
-  "mcpServers": {
-    "playwright": {
-      "url": "http://localhost:8931/mcp"
-    }
-  }
-}
-```
-
-<details>
-<summary><b>Docker</b></summary>
-
-**NOTE:** The Docker implementation only supports headless chromium at the moment.
-
-```js
-{
-  "mcpServers": {
-    "playwright": {
-      "command": "docker",
-      "args": ["run", "-i", "--rm", "--init", "--pull=always", "mcr.microsoft.com/playwright/mcp"]
-    }
-  }
-}
-```
-
-You can build the Docker image yourself.
-
-```
-docker build -t mcr.microsoft.com/playwright/mcp .
-```
-</details>
-
-<details>
-<summary><b>Programmatic usage</b></summary>
-
-```js
-import http from 'http';
-
-import { createConnection } from '@playwright/mcp';
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
-
-http.createServer(async (req, res) => {
-  // ...
-
-  // Creates a headless Playwright MCP server with SSE transport
-  const connection = await createConnection({ browser: { launchOptions: { headless: true } } });
-  const transport = new SSEServerTransport('/messages', res);
-  await connection.sever.connect(transport);
-
-  // ...
-});
-```
-</details>
+An attempt to extend/modify MCP tools for personal purpose
+
+---
+
+### Installation
+
+1. Clone this repository and navigate to its directory:
+   ```sh
+   git clone <repo-url>
+   cd playwright-mcp-mod
+   ```
+2. Install dependencies:
+   ```sh
+   npm install
+   ```
+3. Build the project:
+   ```sh
+   npm run build
+   ```
+4. Add MCP details to your config (example):
+   ```js
+   {
+     "mcpServers": {
+       "playwright-mod": {
+         "command": "npx",
+         "args": ["path/to/this_MCP_repo"]
+       },
+     }
+   }
+   ```
+
+---
+
+### 🆕 Added Tools
+
+#### ✨ browser_inspect_element
+
+- **Purpose:**
+  - Allows you to reveal the selector and DOM tree details of an internal reference in the browser.
+  - Supports inspecting a single element or multiple elements in batch.
+- **Usage:**
+  - Use this tool to programmatically inspect elements, retrieve their selectors, and understand their DOM structure for automation or debugging purposes.
+  - Parameters:
+    - `element` (string): Human-readable element description for permission.
+    - `ref` (string): Exact target element reference from the page snapshot.
+    - `batch` (array, optional): Additional elements to inspect in batch.
+- **Read-only:** true
+
+---
 
 ### Tools
 
@@ -561,6 +245,17 @@ http.createServer(async (req, res) => {
     - `textGone` (string, optional): The text to wait for to disappear
   - Read-only: **true**
 
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **✨ browser_inspect_element**
+  - Title: Inspect element
+  - Description: Reveal the selector and DOM tree details of an internal reference. Can inspect a single element or multiple elements in batch using the batch parameter.
+  - Parameters:
+    - `element` (string): Human-readable element description used to obtain permission to interact with the element
+    - `ref` (string): Exact target element reference from the page snapshot
+    - `batch` (array, optional): Optional array of additional elements to inspect in batch
+  - Read-only: **true**
+
 </details>
 
 <details>
@@ -669,6 +364,5 @@ http.createServer(async (req, res) => {
   - Read-only: **true**
 
 </details>
-
 
 <!--- End of tools generated section -->
