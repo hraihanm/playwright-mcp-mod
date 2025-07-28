@@ -370,6 +370,123 @@ const inspectElement = defineTool({
   },
 });
 
+const verifySelectorSchema = z.object({
+  element: z.string().describe('Human-readable element description (e.g., "Email input")'),
+  selector: z.string().describe('Selector to verify (e.g., "#email")'),
+  details: z.any().optional().describe('Optional details object from browser_inspect_element'),
+});
+
+const verifySelector = defineTool({
+  capability: 'core',
+  schema: {
+    name: 'browser_verify_selector',
+    title: 'Verify selector',
+    description: 'Verify that a selector matches an element and contextually matches the description',
+    inputSchema: verifySelectorSchema,
+    type: 'readOnly',
+  },
+
+  handle: async (context, params) => {
+    await context.ensureTab();
+    const tab = context.currentTabOrDie();
+    const page = tab.page;
+    const { element: description, selector, details } = params;
+
+    let match = false;
+    let confidence = 0;
+    let explanation = '';
+    let foundElement = null;
+    
+    try {
+      foundElement = await page.$(selector);
+      
+      if (!foundElement) {
+        explanation = `❌ Selector '${selector}' did not match any element on the page.`;
+        return {
+          code: [`console.log("${explanation}");`],
+          match: false,
+          confidence: 0,
+          explanation,
+          captureSnapshot: false,
+          waitForNetwork: false,
+        };
+      }
+
+      match = true;
+      // Try to get properties for contextual match
+      const props = await foundElement.evaluate((el: HTMLElement & { labels?: NodeListOf<HTMLLabelElement> }) => {
+        return {
+          tagName: el.tagName,
+          id: el.id,
+          className: el.className,
+          name: el.getAttribute('name'),
+          type: el.getAttribute('type'),
+          placeholder: el.getAttribute('placeholder'),
+          ariaLabel: el.getAttribute('aria-label'),
+          label: (() => {
+            if (el.labels && el.labels.length > 0) return el.labels[0].innerText;
+            const labelledby = el.getAttribute('aria-labelledby');
+            if (labelledby) {
+              const labelEl = document.getElementById(labelledby);
+              if (labelEl) return labelEl.innerText;
+            }
+            if (el.parentElement && el.parentElement.tagName === 'LABEL') return el.parentElement.innerText;
+            return null;
+          })(),
+          textContent: el.textContent?.trim() || '',
+        };
+      });
+
+      // Heuristic: check if description is in any of the properties
+      const descLower = description.toLowerCase();
+      let contextMatch = false;
+      let matchedProperty = '';
+      let matchedValue = '';
+
+      for (const [key, value] of Object.entries(props)) {
+        if (typeof value === 'string' && value.toLowerCase().includes(descLower)) {
+          contextMatch = true;
+          matchedProperty = key;
+          matchedValue = value;
+          break;
+        }
+      }
+
+      if (contextMatch) {
+        confidence = 1.0;
+        explanation = `✅ Perfect match!\n` +
+                     `• Selector: '${selector}'\n` +
+                     `• Found element: <${props.tagName.toLowerCase()}>\n` +
+                     `• Matched property: ${matchedProperty} = "${matchedValue}"`;
+      } else {
+        confidence = 0.5;
+        explanation = `⚠️ Partial match\n` +
+                     `• Selector '${selector}' found an element\n` +
+                     `• Element: <${props.tagName.toLowerCase()}>\n` +
+                     `• But no property matches description '${description}'\n` +
+                     `• Available properties:\n` +
+                     Object.entries(props)
+                       .filter(([_, v]) => v)
+                       .map(([k, v]) => `  - ${k}: "${v}"`)
+                       .join('\n');
+      }
+    } catch (e) {
+      explanation = `❌ Error verifying selector: ${e}`;
+      match = false;
+      confidence = 0;
+    }
+
+    return {
+      code: [`console.log(\`${explanation.replace(/`/g, '\\`')}\`);`],
+      match,
+      confidence,
+      explanation,
+      captureSnapshot: false,
+      waitForNetwork: false,
+    };
+  },
+});
+
 export default [
   snapshot,
   click,
@@ -377,4 +494,5 @@ export default [
   hover,
   selectOption,
   inspectElement,
+  verifySelector,
 ];
