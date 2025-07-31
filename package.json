@@ -39,6 +39,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.16.0",
+    "natural": "^6.10.4",
     "commander": "^13.1.0",
     "debug": "^4.4.1",
     "mime": "^4.0.7",
