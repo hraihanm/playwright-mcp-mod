@@ -212,6 +212,7 @@ const inspectElement = defineTool({
 const verifySelectorSchema = z.object({
   element: z.string().describe('Human-readable element description (e.g., "Email input")'),
   selector: z.string().describe('Selector to verify (e.g., "#email")'),
+  expected: z.string().describe('Expected text or value to find in the element (e.g., "Sign up" for a button)'),
   details: z.any().optional().describe('Optional details object from browser_inspect_element'),
 });
 
@@ -229,7 +230,7 @@ const verifySelector = defineTool({
     await context.ensureTab();
     const tab = context.currentTabOrDie();
     const page = tab.page;
-    const { element: description, selector, details } = params;
+    const { element: description, selector, expected, details } = params;
 
     let match = false;
     let confidence = 0;
@@ -254,6 +255,13 @@ const verifySelector = defineTool({
       match = true;
       // Try to get properties for contextual match
       const props = await foundElement.evaluate((el: HTMLElement & { labels?: NodeListOf<HTMLLabelElement> }) => {
+        const getValue = (el: HTMLElement) => {
+          if ('value' in el && typeof (el as any).value === 'string') {
+            return (el as any).value;
+          }
+          return null;
+        };
+
         return {
           tagName: el.tagName,
           id: el.id,
@@ -262,6 +270,7 @@ const verifySelector = defineTool({
           type: el.getAttribute('type'),
           placeholder: el.getAttribute('placeholder'),
           ariaLabel: el.getAttribute('aria-label'),
+          value: getValue(el),
           label: (() => {
             if (el.labels && el.labels.length > 0) return el.labels[0].innerText;
             const labelledby = el.getAttribute('aria-labelledby');
@@ -276,33 +285,96 @@ const verifySelector = defineTool({
         };
       });
 
+      // Check for exact or partial matches with the expected text
+      const expectedLower = expected.toLowerCase();
+      const textMatches = new Set<string>();
+      let bestMatchValue = '';
+      let bestMatchProperty = '';
+      let exactMatch = false;
+
+      // Check all properties for matches with expected text
+      for (const [key, value] of Object.entries(props)) {
+        if (typeof value === 'string') {
+          const valueLower = value.toLowerCase();
+          if (valueLower === expectedLower) {
+            exactMatch = true;
+            bestMatchValue = value;
+            bestMatchProperty = key;
+            break;
+          } else if (valueLower.includes(expectedLower) || expectedLower.includes(valueLower)) {
+            textMatches.add(key);
+            if (!bestMatchValue) {
+              bestMatchValue = value;
+              bestMatchProperty = key;
+            }
+          }
+        }
+      }
+
       // Heuristic: check if description is in any of the properties
       const descLower = description.toLowerCase();
       let contextMatch = false;
-      let matchedProperty = '';
-      let matchedValue = '';
+      let descMatchedProperty = '';
+      let descMatchedValue = '';
 
       for (const [key, value] of Object.entries(props)) {
         if (typeof value === 'string' && value.toLowerCase().includes(descLower)) {
           contextMatch = true;
-          matchedProperty = key;
-          matchedValue = value;
+          descMatchedProperty = key;
+          descMatchedValue = value;
           break;
         }
       }
 
-      if (contextMatch) {
+      // Calculate confidence based on both description and expected text matches
+      if (exactMatch && contextMatch) {
         confidence = 1.0;
         explanation = `✅ Perfect match!\n` +
                      `• Selector: '${selector}'\n` +
                      `• Found element: <${props.tagName.toLowerCase()}>\n` +
-                     `• Matched property: ${matchedProperty} = "${matchedValue}"`;
-      } else {
-        confidence = 0.5;
+                     `• Expected text "${expected}" found in ${bestMatchProperty}: "${bestMatchValue}"\n` +
+                     `• Description "${description}" matched in ${descMatchedProperty}: "${descMatchedValue}"`;
+      } else if (exactMatch) {
+        confidence = 0.8;
+        explanation = `✅ Strong match!\n` +
+                     `• Selector: '${selector}'\n` +
+                     `• Found element: <${props.tagName.toLowerCase()}>\n` +
+                     `• Expected text "${expected}" found in ${bestMatchProperty}: "${bestMatchValue}"\n` +
+                     `• But description "${description}" not found in element properties`;
+      } else if (textMatches.size > 0 && contextMatch) {
+        confidence = 0.6;
         explanation = `⚠️ Partial match\n` +
+                     `• Selector: '${selector}'\n` +
+                     `• Found element: <${props.tagName.toLowerCase()}>\n` +
+                     `• Expected text "${expected}" partially matched in properties: ${Array.from(textMatches).join(', ')}\n` +
+                     `• Best match in ${bestMatchProperty}: "${bestMatchValue}"\n` +
+                     `• Description matched in ${descMatchedProperty}: "${descMatchedValue}"`;
+      } else if (textMatches.size > 0) {
+        confidence = 0.4;
+        explanation = `⚠️ Weak match\n` +
+                     `• Selector: '${selector}'\n` +
+                     `• Found element: <${props.tagName.toLowerCase()}>\n` +
+                     `• Expected text "${expected}" partially matched in properties: ${Array.from(textMatches).join(', ')}\n` +
+                     `• Best match in ${bestMatchProperty}: "${bestMatchValue}"\n` +
+                     `• But description "${description}" not found in element properties`;
+      } else if (contextMatch) {
+        confidence = 0.2;
+        explanation = `⚠️ Description match only\n` +
+                     `• Selector: '${selector}'\n` +
+                     `• Found element: <${props.tagName.toLowerCase()}>\n` +
+                     `• Description "${description}" matched in ${descMatchedProperty}: "${descMatchedValue}"\n` +
+                     `• But expected text "${expected}" not found in any property\n` +
+                     `• Available properties:\n` +
+                     Object.entries(props)
+                       .filter(([_, v]) => v)
+                       .map(([k, v]) => `  - ${k}: "${v}"`)
+                       .join('\n');
+      } else {
+        confidence = 0.1;
+        explanation = `❌ No matches\n` +
                      `• Selector '${selector}' found an element\n` +
                      `• Element: <${props.tagName.toLowerCase()}>\n` +
-                     `• But no property matches description '${description}'\n` +
+                     `• But neither expected text "${expected}" nor description "${description}" found\n` +
                      `• Available properties:\n` +
                      Object.entries(props)
                        .filter(([_, v]) => v)
