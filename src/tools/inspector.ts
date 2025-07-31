@@ -214,6 +214,12 @@ const verifySelectorSchema = z.object({
   selector: z.string().describe('Selector to verify (e.g., "#email")'),
   expected: z.string().describe('Expected text or value to find in the element (e.g., "Sign up" for a button)'),
   details: z.any().optional().describe('Optional details object from browser_inspect_element'),
+  batch: z.array(z.object({
+    element: z.string().describe('Human-readable element description (e.g., "Email input")'),
+    selector: z.string().describe('Selector to verify (e.g., "#email")'),
+    expected: z.string().describe('Expected text or value to find in the element (e.g., "Sign up" for a button)'),
+    details: z.any().optional().describe('Optional details object from browser_inspect_element'),
+  })).optional().describe('Optional array of additional selectors to verify in batch'),
 });
 
 // Initialize the tokenizer
@@ -303,156 +309,188 @@ const verifySelector = defineTool({
     await context.ensureTab();
     const tab = context.currentTabOrDie();
     const page = tab.page;
-    const { element: description, selector, expected, details } = params;
 
-    let match = false;
-    let confidence = 0;
-    let explanation = '';
-    let foundElement = null;
-    
-    try {
-      foundElement = await page.$(selector);
-      
-      if (!foundElement) {
-        explanation = `❌ Selector '${selector}' did not match any element on the page.`;
-        return {
-          code: [`console.log("${explanation}");`],
+    // Handle both single element and batch requests
+    const elementsToVerify = [
+      { element: params.element, selector: params.selector, expected: params.expected, details: params.details },
+      ...(params.batch || [])
+    ];
+
+    const results = [];
+
+    for (const elementToVerify of elementsToVerify) {
+      const { element: description, selector, expected, details } = elementToVerify;
+      let match = false;
+      let confidence = 0;
+      let explanation = '';
+      let foundElement = null;
+
+      try {
+        foundElement = await page.$(selector);
+        
+        if (!foundElement) {
+          explanation = `❌ Selector '${selector}' did not match any element on the page.`;
+          results.push({
+            element: description,
+            selector,
+            match: false,
+            confidence: 0,
+            explanation,
+          });
+          continue;
+        }
+
+        match = true;
+        // Try to get properties for contextual match
+        const props = await foundElement.evaluate((el: HTMLElement & { labels?: NodeListOf<HTMLLabelElement> }) => {
+          const getValue = (el: HTMLElement) => {
+            if ('value' in el && typeof (el as any).value === 'string') {
+              return (el as any).value;
+            }
+            return null;
+          };
+
+          return {
+            tagName: el.tagName,
+            id: el.id,
+            className: el.className,
+            name: el.getAttribute('name'),
+            type: el.getAttribute('type'),
+            placeholder: el.getAttribute('placeholder'),
+            ariaLabel: el.getAttribute('aria-label'),
+            value: getValue(el),
+            label: (() => {
+              if (el.labels && el.labels.length > 0) return el.labels[0].innerText;
+              const labelledby = el.getAttribute('aria-labelledby');
+              if (labelledby) {
+                const labelEl = document.getElementById(labelledby);
+                if (labelEl) return labelEl.innerText;
+              }
+              if (el.parentElement && el.parentElement.tagName === 'LABEL') return el.parentElement.innerText;
+              return null;
+            })(),
+            textContent: el.textContent?.trim() || '',
+          };
+        });
+
+        // Use semantic similarity for both expected text and description
+        const expectedMatch = findBestSemanticMatch(expected, props);
+        const descriptionMatch = findBestSemanticMatch(description, props);
+
+        // Define similarity thresholds
+        const HIGH_SIMILARITY = 0.8;
+        const MEDIUM_SIMILARITY = 0.5;
+        const LOW_SIMILARITY = 0.3;
+
+        // Determine match levels
+        const hasStrongExpectedMatch = expectedMatch.similarity >= HIGH_SIMILARITY;
+        const hasMediumExpectedMatch = expectedMatch.similarity >= MEDIUM_SIMILARITY;
+        const hasWeakExpectedMatch = expectedMatch.similarity >= LOW_SIMILARITY;
+
+        const hasStrongDescMatch = descriptionMatch.similarity >= HIGH_SIMILARITY;
+        const hasMediumDescMatch = descriptionMatch.similarity >= MEDIUM_SIMILARITY;
+
+        // For semantic labels (like "product name"), we focus more on the expected text match
+        // and treat the description match as a bonus rather than a requirement
+        const isSemanticLabel = description.toLowerCase().includes('name') || 
+                               description.toLowerCase().includes('title') ||
+                               description.toLowerCase().includes('label') ||
+                               description.toLowerCase().includes('heading');
+
+        // Adjust confidence based on expected text match primarily
+        if (hasStrongExpectedMatch) {
+          confidence = isSemanticLabel ? 0.95 : (hasStrongDescMatch ? 1.0 : 0.85);
+          const matchLevel = confidence === 1.0 ? "Perfect" : "Strong";
+          explanation = `✅ ${matchLevel} match!\n` +
+                       `• Selector: '${selector}'\n` +
+                       `• Found element: <${props.tagName.toLowerCase()}>\n` +
+                       `• Expected text : "${expected}"\n` +
+                       `• Found text    : "${expectedMatch.value}" (${(expectedMatch.similarity * 100).toFixed(1)}% similarity in ${expectedMatch.property})\n` +
+                       (isSemanticLabel ? 
+                         `• Description "${description}" is treated as a semantic label\n` :
+                         `• Description "${description}" match: ${(descriptionMatch.similarity * 100).toFixed(1)}% similarity in ${descriptionMatch.property || 'N/A'}`);
+        } else if (hasMediumExpectedMatch) {
+          confidence = isSemanticLabel ? 0.7 : (hasMediumDescMatch ? 0.7 : 0.6);
+          explanation = `⚠️ Moderate match\n` +
+                       `• Selector: '${selector}'\n` +
+                       `• Found element: <${props.tagName.toLowerCase()}>\n` +
+                       `• Expected text : "${expected}"\n` +
+                       `• Found text    : "${expectedMatch.value}" (${(expectedMatch.similarity * 100).toFixed(1)}% similarity in ${expectedMatch.property})\n` +
+                       (isSemanticLabel ? 
+                         `• Description "${description}" is treated as a semantic label\n` :
+                         `• Description "${description}" match: ${(descriptionMatch.similarity * 100).toFixed(1)}% similarity in ${descriptionMatch.property || 'N/A'}`);
+        } else if (hasWeakExpectedMatch) {
+          confidence = 0.4;
+          explanation = `⚠️ Weak match\n` +
+                       `• Selector: '${selector}'\n` +
+                       `• Found element: <${props.tagName.toLowerCase()}>\n` +
+                       `• Expected text : "${expected}"\n` +
+                       `• Found text    : "${expectedMatch.value}" (${(expectedMatch.similarity * 100).toFixed(1)}% similarity in ${expectedMatch.property})\n` +
+                       (isSemanticLabel ? 
+                         `• Description "${description}" is treated as a semantic label\n` :
+                         `• Description "${description}" match: ${(descriptionMatch.similarity * 100).toFixed(1)}% similarity in ${descriptionMatch.property || 'N/A'}`);
+        } else {
+          confidence = 0.1;
+          explanation = `❌ No significant matches\n` +
+                       `• Selector '${selector}' found an element\n` +
+                       `• Element: <${props.tagName.toLowerCase()}>\n` +
+                       `• Expected text : "${expected}"\n` +
+                       `• Found text    : "${expectedMatch.value}" (${(expectedMatch.similarity * 100).toFixed(1)}% similarity in ${expectedMatch.property})\n` +
+                       (isSemanticLabel ? 
+                         `• Description "${description}" is treated as a semantic label\n` :
+                         `• Description "${description}" match: ${(descriptionMatch.similarity * 100).toFixed(1)}% similarity in ${descriptionMatch.property || 'N/A'}`);
+        }
+
+        // Add available properties for weak matches or failures
+        if (confidence <= 0.4) {
+          explanation += `\n• Available properties:\n` +
+                        Object.entries(props)
+                          .filter(([_, v]) => v)
+                          .map(([k, v]) => `  - ${k}: "${v}"`)
+                          .join('\n');
+        }
+
+        results.push({
+          element: description,
+          selector,
+          match,
+          confidence,
+          explanation,
+        });
+
+      } catch (e) {
+        explanation = `❌ Error verifying selector: ${e}`;
+        results.push({
+          element: description,
+          selector,
           match: false,
           confidence: 0,
           explanation,
-          captureSnapshot: false,
-          waitForNetwork: false,
-        };
+        });
       }
+    }
 
-      match = true;
-      // Try to get properties for contextual match
-      const props = await foundElement.evaluate((el: HTMLElement & { labels?: NodeListOf<HTMLLabelElement> }) => {
-        const getValue = (el: HTMLElement) => {
-          if ('value' in el && typeof (el as any).value === 'string') {
-            return (el as any).value;
-          }
-          return null;
-        };
-
-        return {
-          tagName: el.tagName,
-          id: el.id,
-          className: el.className,
-          name: el.getAttribute('name'),
-          type: el.getAttribute('type'),
-          placeholder: el.getAttribute('placeholder'),
-          ariaLabel: el.getAttribute('aria-label'),
-          value: getValue(el),
-          label: (() => {
-            if (el.labels && el.labels.length > 0) return el.labels[0].innerText;
-            const labelledby = el.getAttribute('aria-labelledby');
-            if (labelledby) {
-              const labelEl = document.getElementById(labelledby);
-              if (labelEl) return labelEl.innerText;
-            }
-            if (el.parentElement && el.parentElement.tagName === 'LABEL') return el.parentElement.innerText;
-            return null;
-          })(),
-          textContent: el.textContent?.trim() || '',
-        };
-      });
-
-      // Use semantic similarity for both expected text and description
-      const expectedMatch = findBestSemanticMatch(expected, props);
-      const descriptionMatch = findBestSemanticMatch(description, props);
-
-      // Define similarity thresholds
-      const HIGH_SIMILARITY = 0.8;
-      const MEDIUM_SIMILARITY = 0.5;
-      const LOW_SIMILARITY = 0.3;
-
-      // Determine match levels
-      const hasStrongExpectedMatch = expectedMatch.similarity >= HIGH_SIMILARITY;
-      const hasMediumExpectedMatch = expectedMatch.similarity >= MEDIUM_SIMILARITY;
-      const hasWeakExpectedMatch = expectedMatch.similarity >= LOW_SIMILARITY;
-
-      const hasStrongDescMatch = descriptionMatch.similarity >= HIGH_SIMILARITY;
-      const hasMediumDescMatch = descriptionMatch.similarity >= MEDIUM_SIMILARITY;
-
-      // All matching is now done through semantic similarity
-
-            // For semantic labels (like "product name"), we focus more on the expected text match
-      // and treat the description match as a bonus rather than a requirement
-      const isSemanticLabel = description.toLowerCase().includes('name') || 
-                             description.toLowerCase().includes('title') ||
-                             description.toLowerCase().includes('label') ||
-                             description.toLowerCase().includes('heading');
-
-      // Adjust confidence based on expected text match primarily
-      if (hasStrongExpectedMatch) {
-        confidence = isSemanticLabel ? 0.95 : (hasStrongDescMatch ? 1.0 : 0.85);
-        const matchLevel = confidence === 1.0 ? "Perfect" : "Strong";
-        explanation = `✅ ${matchLevel} match!\n` +
-                     `• Selector: '${selector}'\n` +
-                     `• Found element: <${props.tagName.toLowerCase()}>\n` +
-                     `• Expected text : "${expected}"\n` +
-                     `• Found text    : "${expectedMatch.value}" (${(expectedMatch.similarity * 100).toFixed(1)}% similarity in ${expectedMatch.property})\n` +
-                     (isSemanticLabel ? 
-                       `• Description "${description}" is treated as a semantic label\n` :
-                       `• Description "${description}" match: ${(descriptionMatch.similarity * 100).toFixed(1)}% similarity in ${descriptionMatch.property || 'N/A'}`);
-      } else if (hasMediumExpectedMatch) {
-        confidence = isSemanticLabel ? 0.7 : (hasMediumDescMatch ? 0.7 : 0.6);
-        explanation = `⚠️ Moderate match\n` +
-                     `• Selector: '${selector}'\n` +
-                     `• Found element: <${props.tagName.toLowerCase()}>\n` +
-                     `• Expected text : "${expected}"\n` +
-                     `• Found text    : "${expectedMatch.value}" (${(expectedMatch.similarity * 100).toFixed(1)}% similarity in ${expectedMatch.property})\n` +
-                     (isSemanticLabel ? 
-                       `• Description "${description}" is treated as a semantic label\n` :
-                       `• Description "${description}" match: ${(descriptionMatch.similarity * 100).toFixed(1)}% similarity in ${descriptionMatch.property || 'N/A'}`);
-      } else if (hasWeakExpectedMatch) {
-        confidence = 0.4;
-        explanation = `⚠️ Weak match\n` +
-                     `• Selector: '${selector}'\n` +
-                     `• Found element: <${props.tagName.toLowerCase()}>\n` +
-                     `• Expected text : "${expected}"\n` +
-                     `• Found text    : "${expectedMatch.value}" (${(expectedMatch.similarity * 100).toFixed(1)}% similarity in ${expectedMatch.property})\n` +
-                     (isSemanticLabel ? 
-                       `• Description "${description}" is treated as a semantic label\n` :
-                       `• Description "${description}" match: ${(descriptionMatch.similarity * 100).toFixed(1)}% similarity in ${descriptionMatch.property || 'N/A'}`);
-      } else {
-        confidence = 0.1;
-        explanation = `❌ No significant matches\n` +
-                     `• Selector '${selector}' found an element\n` +
-                     `• Element: <${props.tagName.toLowerCase()}>\n` +
-                     `• Expected text : "${expected}"\n` +
-                     `• Found text    : "${expectedMatch.value}" (${(expectedMatch.similarity * 100).toFixed(1)}% similarity in ${expectedMatch.property})\n` +
-                     (isSemanticLabel ? 
-                       `• Description "${description}" is treated as a semantic label\n` :
-                       `• Description "${description}" match: ${(descriptionMatch.similarity * 100).toFixed(1)}% similarity in ${descriptionMatch.property || 'N/A'}`);
+    // Format the final output
+    let finalExplanation = '';
+    if (results.length === 1) {
+      finalExplanation = results[0].explanation;
+    } else {
+      finalExplanation = `# Batch Selector Verification Results (${results.length} elements)\n\n`;
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        finalExplanation += `## ${i + 1}. "${result.element}" (${result.selector})\n${result.explanation}\n\n`;
       }
-
-      // Add available properties for weak matches or failures
-      if (confidence <= 0.4) {
-        explanation += `\n• Available properties:\n` +
-                      Object.entries(props)
-                        .filter(([_, v]) => v)
-                        .map(([k, v]) => `  - ${k}: "${v}"`)
-                        .join('\n');
-      }
-    } catch (e) {
-      explanation = `❌ Error verifying selector: ${e}`;
-      match = false;
-      confidence = 0;
     }
 
     return {
-      code: [`\`${explanation.replace(/`/g, '\\`')}\``],
+      code: [`\`${finalExplanation.replace(/`/g, '\\`')}\``],
       content: [
         { 
           type: 'text', 
-          text: explanation
+          text: finalExplanation
         }
       ],
-      match,
-      confidence,
-      explanation,
+      results,
       captureSnapshot: false,
       waitForNetwork: false,
     };
