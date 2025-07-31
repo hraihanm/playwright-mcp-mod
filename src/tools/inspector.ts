@@ -213,11 +213,13 @@ const verifySelectorSchema = z.object({
   element: z.string().describe('Human-readable element description (e.g., "Email input")'),
   selector: z.string().describe('Selector to verify (e.g., "#email")'),
   expected: z.string().describe('Expected text or value to find in the element (e.g., "Sign up" for a button)'),
+  attribute: z.string().optional().describe('Optional attribute name to check instead of text content (e.g., "href", "data-id", "value")'),
   details: z.any().optional().describe('Optional details object from browser_inspect_element'),
   batch: z.array(z.object({
     element: z.string().describe('Human-readable element description (e.g., "Email input")'),
     selector: z.string().describe('Selector to verify (e.g., "#email")'),
     expected: z.string().describe('Expected text or value to find in the element (e.g., "Sign up" for a button)'),
+    attribute: z.string().optional().describe('Optional attribute name to check instead of text content (e.g., "href", "data-id", "value")'),
     details: z.any().optional().describe('Optional details object from browser_inspect_element'),
   })).optional().describe('Optional array of additional selectors to verify in batch'),
 });
@@ -342,13 +344,21 @@ const verifySelector = defineTool({
 
         match = true;
         // Try to get properties for contextual match
-        const props = await foundElement.evaluate((el: HTMLElement & { labels?: NodeListOf<HTMLLabelElement> }) => {
+        const props = await foundElement.evaluate((el: HTMLElement & { labels?: NodeListOf<HTMLLabelElement> }, attribute: string | undefined) => {
           const getValue = (el: HTMLElement) => {
             if ('value' in el && typeof (el as any).value === 'string') {
               return (el as any).value;
             }
             return null;
           };
+
+          const getAttributeValue = (el: HTMLElement, attrName: string | undefined) => {
+            if (!attrName) return null;
+            const value = el.getAttribute(attrName);
+            return value !== null ? value : null;
+          };
+
+          const attributeValue = getAttributeValue(el, attribute);
 
           return {
             tagName: el.tagName,
@@ -370,11 +380,30 @@ const verifySelector = defineTool({
               return null;
             })(),
             textContent: el.textContent?.trim() || '',
+            attributeValue,
+            attributeName: attribute,
+            allAttributes: Object.fromEntries(Array.from(el.attributes).map(attr => [attr.name, attr.value])),
           };
-        });
+        }, elementToVerify.attribute);
 
-        // Use semantic similarity for both expected text and description
-        const expectedMatch = findBestSemanticMatch(expected, props);
+        // If an attribute is specified, prioritize exact attribute matching
+        let expectedMatch;
+        if (elementToVerify.attribute && props.attributeValue !== null) {
+          const exactAttributeMatch = props.attributeValue === expected;
+          expectedMatch = {
+            similarity: exactAttributeMatch ? 1.0 : 0,
+            property: props.attributeName || '',
+            value: props.attributeValue || ''
+          };
+        } else {
+          // Use semantic similarity for text content if no attribute specified or attribute not found
+          const propsForMatching = {
+            ...props,
+            ...(props.attributeValue && { [props.attributeName || 'attribute']: props.attributeValue })
+          };
+          expectedMatch = findBestSemanticMatch(expected, propsForMatching);
+        }
+        
         const descriptionMatch = findBestSemanticMatch(description, props);
 
         // Define similarity thresholds
@@ -404,8 +433,8 @@ const verifySelector = defineTool({
           explanation = `✅ ${matchLevel} match!\n` +
                        `• Selector: '${selector}'\n` +
                        `• Found element: <${props.tagName.toLowerCase()}>\n` +
-                       `• Expected text : "${expected}"\n` +
-                       `• Found text    : "${expectedMatch.value}" (${(expectedMatch.similarity * 100).toFixed(1)}% similarity in ${expectedMatch.property})\n` +
+                       `• Expected ${elementToVerify.attribute ? `attribute '${elementToVerify.attribute}'` : 'text'}: "${expected}"\n` +
+                       `• Found ${elementToVerify.attribute ? 'attribute' : 'text'}: "${expectedMatch.value}"${elementToVerify.attribute ? '' : ` (${(expectedMatch.similarity * 100).toFixed(1)}% similarity in ${expectedMatch.property})`}\n` +
                        (isSemanticLabel ? 
                          `• Description "${description}" is treated as a semantic label\n` :
                          `• Description "${description}" match: ${(descriptionMatch.similarity * 100).toFixed(1)}% similarity in ${descriptionMatch.property || 'N/A'}`);
