@@ -35,6 +35,28 @@ An attempt to extend/modify MCP tools for personal purpose
 
 ### 🆕 Added Tools
 
+#### ✨ browser_verify_selector
+
+- **Purpose:**
+  - Verifies that a selector matches an element and contextually matches the expected content
+  - Supports both exact attribute matching and semantic text similarity matching
+  - Can verify single elements or multiple elements in batch
+- **Usage:**
+  - Use this tool to verify element selection accuracy, especially for dynamic content
+  - Parameters:
+    - `element` (string): Human-readable element description (e.g., "Product name")
+    - `selector` (string): Selector to verify (e.g., "#product-title")
+    - `expected` (string): Expected text or value to find in the element
+    - `attribute` (string, optional): Attribute to check instead of text content (e.g., "href", "data-id")
+    - `details` (object, optional): Details object from browser_inspect_element
+    - `batch` (array, optional): Additional selectors to verify in batch
+  - Features:
+    - Semantic matching for text content
+    - Special handling for semantic labels (name, title, label, heading)
+    - Detailed confidence scoring and explanations
+    - Supports batch verification
+- **Read-only:** true
+
 #### ✨ browser_inspect_element
 
 - **Purpose:**
@@ -233,6 +255,20 @@ An attempt to extend/modify MCP tools for personal purpose
     - `submit` (boolean, optional): Whether to submit entered text (press Enter after)
     - `slowly` (boolean, optional): Whether to type one character at a time. Useful for triggering key handlers in the page. By default entire text is filled in at once.
   - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **✨ browser_verify_selector**
+  - Title: Verify selector
+  - Description: Verify that a selector matches an element and contextually matches the expected content
+  - Parameters:
+    - `element` (string): Human-readable element description (e.g., "Product name")
+    - `selector` (string): Selector to verify (e.g., "#product-title")
+    - `expected` (string): Expected text or value to find in the element
+    - `attribute` (string, optional): Attribute to check instead of text content (e.g., "href", "data-id")
+    - `details` (object, optional): Details object from browser_inspect_element
+    - `batch` (array, optional): Additional selectors to verify in batch
+  - Read-only: **true**
 
 <!-- NOTE: This has been generated via update-readme.js -->
 
