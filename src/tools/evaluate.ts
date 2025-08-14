@@ -51,17 +51,42 @@ const evaluate = defineTool({
       code.push(`await page.evaluate(${javascript.quote(params.function)});`);
     }
 
+    // Perform the evaluation immediately so we can return resultOverride
+    let evalResult: unknown;
+    try {
+      const receiver = (locator ?? (tab.page as any)) as any;
+      evalResult = await receiver._evaluateFunction(params.function);
+    } catch (e) {
+      evalResult = { error: String(e) };
+    }
+
+    const renderedResult = (() => {
+      try {
+        const json = JSON.stringify(evalResult, null, 2);
+        return json ?? 'undefined';
+      } catch {
+        return String(evalResult);
+      }
+    })();
+
+    const finalContent = [
+      {
+        type: 'text' as const,
+        text: `### Ran Playwright code\n\n\`\`\`js\n${code.join('\n')}\n\`\`\``,
+      },
+      {
+        type: 'text' as const,
+        text: '- Result: ' + renderedResult,
+      }
+    ];
+
     return {
       code,
-      action: async () => {
-        const receiver = locator ?? tab.page as any;
-        const result = await receiver._evaluateFunction(params.function);
-        return {
-          content: [{ type: 'text', text: '- Result: ' + (JSON.stringify(result, null, 2) || 'undefined') }],
-        };
-      },
       captureSnapshot: false,
       waitForNetwork: false,
+      resultOverride: {
+        content: finalContent,
+      },
     };
   },
 });

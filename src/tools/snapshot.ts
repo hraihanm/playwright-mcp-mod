@@ -33,10 +33,42 @@ const snapshot = defineTool({
   handle: async context => {
     await context.ensureTab();
 
+    const tab = context.currentTabOrDie();
+    await tab.captureSnapshot();
+
+    const code = [`// <internal code to capture accessibility snapshot>`];
+
+    const sections: string[] = [];
+    if (context.tabs().length > 1)
+      sections.push('', await context.listTabsMarkdown());
+
+    if (context.tabs().length > 1)
+      sections.push('', '### Current tab');
+    else
+      sections.push('', '### Page state');
+
+    sections.push(
+      `- Page URL: ${tab.page.url()}`,
+      `- Page Title: ${await tab.title()}`
+    );
+    sections.push(tab.snapshotOrDie().text());
+
     return {
-      code: [`// <internal code to capture accessibility snapshot>`],
-      captureSnapshot: true,
+      code,
+      captureSnapshot: false,
       waitForNetwork: false,
+      resultOverride: {
+        content: [
+          {
+            type: 'text' as const,
+            text: `### Ran Playwright code\n\n\`\`\`js\n${code.join('\n')}\n\`\`\``,
+          },
+          {
+            type: 'text' as const,
+            text: sections.join('\n'),
+          }
+        ]
+      }
     };
   },
 });

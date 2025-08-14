@@ -169,158 +169,164 @@ const inspectElement = defineTool({
       ...codeArrays.flat()
     ];
 
+    // Execute the inspection immediately and construct the final content
+    const results = [] as Array<any>;
+    for (const element of elementsToInspect) {
+      try {
+        const locator = snapshot.refLocator(element);
+        
+        // Get the resolved selector
+        const resolvedSelector = await generateLocator(locator);
+        
+        // Get element details
+        const elementDetails = await locator.evaluate((el: Element) => {
+          const getPath = (element: Element): string => {
+            const path: string[] = [];
+            let current = element;
+            
+            while (current && current !== document.body) {
+              let selector = current.tagName.toLowerCase();
+              
+              if ((current as HTMLElement).id) {
+                selector += `#${(current as HTMLElement).id}`;
+              } else if ((current as HTMLElement).className) {
+                const classes = Array.from((current as HTMLElement).classList).join('.');
+                selector += `.${classes}`;
+              }
+              
+              // Add nth-child if needed
+              const siblings = Array.from(current.parentElement?.children || []);
+              const index = siblings.indexOf(current) + 1;
+              if (siblings.length > 1) {
+                selector += `:nth-child(${index})`;
+              }
+              
+              path.unshift(selector);
+              current = current.parentElement!;
+            }
+            
+            return path.join(' > ');
+          };
+
+          return {
+            tagName: (el as HTMLElement).tagName,
+            id: (el as HTMLElement).id || null,
+            className: (el as HTMLElement).className || null,
+            textContent: el.textContent?.trim().substring(0, 200) || null,
+            attributes: Object.fromEntries([...el.attributes].map(attr => [attr.name, attr.value])),
+            outerHTML: (el as HTMLElement).outerHTML,
+            innerHTML: (el as HTMLElement).innerHTML.substring(0, 500),
+            cssPath: getPath(el),
+            boundingBox: (el as HTMLElement).getBoundingClientRect(),
+            isVisible: 'offsetParent' in el ? (el as any).offsetParent !== null : true,
+            computedStyles: {
+              display: getComputedStyle(el as HTMLElement).display,
+              visibility: getComputedStyle(el as HTMLElement).visibility,
+              opacity: getComputedStyle(el as HTMLElement).opacity,
+              position: getComputedStyle(el as HTMLElement).position,
+              zIndex: getComputedStyle(el as HTMLElement).zIndex,
+            }
+          };
+        });
+
+        // Apply HTML sanitization to the element details
+        if (elementDetails.outerHTML) {
+          elementDetails.outerHTML = sanitizeHTML(elementDetails.outerHTML, sanitizeConfig.maxOuterHTMLLength);
+        }
+        if (elementDetails.innerHTML) {
+          elementDetails.innerHTML = sanitizeHTML(elementDetails.innerHTML, sanitizeConfig.maxInnerHTMLLength);
+        }
+
+        results.push({
+          element: element.element,
+          ref: element.ref,
+          resolvedSelector,
+          details: elementDetails,
+          success: true
+        });
+      } catch (error) {
+        results.push({
+          element: element.element,
+          ref: element.ref,
+          error: error instanceof Error ? error.message : String(error),
+          success: false
+        });
+      }
+    }
+
+    // Format the results
+    let outputText = '';
+    
+    if (results.length === 1) {
+      const result = results[0];
+      if (result.success && result.details) {
+        outputText = `# Element Inspection Results for "${result.element}"\n\n` +
+                    `## Reference: ${result.ref}\n` +
+                    `## Resolved Selector: ${result.resolvedSelector}\n\n` +
+                    `## Element Details:\n` +
+                    `- **Tag Name:** ${result.details.tagName}\n` +
+                    `- **ID:** ${result.details.id || 'None'}\n` +
+                    `- **Class:** ${result.details.className || 'None'}\n` +
+                    `- **CSS Path:** ${result.details.cssPath}\n` +
+                    `- **Visible:** ${result.details.isVisible ? 'Yes' : 'No'}\n` +
+                    `- **Position:** ${result.details.boundingBox ? `x: ${result.details.boundingBox.x}, y: ${result.details.boundingBox.y}, width: ${result.details.boundingBox.width}, height: ${result.details.boundingBox.height}` : 'Not available'}\n\n` +
+                    `## Computed Styles:\n` +
+                    `- **Display:** ${result.details.computedStyles.display}\n` +
+                    `- **Visibility:** ${result.details.computedStyles.visibility}\n` +
+                    `- **Opacity:** ${result.details.computedStyles.opacity}\n` +
+                    `- **Position:** ${result.details.computedStyles.position}\n` +
+                    `- **Z-Index:** ${result.details.computedStyles.zIndex}\n\n` +
+                    `## Text Content:\n${result.details.textContent || 'None'}\n\n` +
+                    `## Attributes:\n${JSON.stringify(result.details.attributes, null, 2)}\n\n` +
+                    `## Outer HTML:\n\`\`\`html\n${result.details.outerHTML}\n\`\`\`\n\n` +
+                    `## Inner HTML:\n\`\`\`html\n${result.details.innerHTML}\n\`\`\`\n\n` +
+                    `> **Note:** HTML content has been sanitized for security. SVG elements, scripts, styles, and potentially sensitive attributes have been removed.`;
+      } else {
+        outputText = `Error inspecting element "${result.element}" with reference "${result.ref}": ${result.error}`;
+      }
+    } else {
+      outputText = `# Batch Element Inspection Results (${results.length} elements)\n\n` +
+                    `> **Note:** HTML content has been sanitized for security. SVG elements, scripts, styles, and potentially sensitive attributes have been removed.\n\n`;
+      
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        outputText += `## ${i + 1}. ${result.element}\n`;
+        outputText += `**Reference:** ${result.ref}\n\n`;
+        
+        if (result.success && result.details) {
+          outputText += `**Resolved Selector:** ${result.resolvedSelector}\n` +
+                        `**Tag Name:** ${result.details.tagName}\n` +
+                        `**ID:** ${result.details.id || 'None'}\n` +
+                        `**Class:** ${result.details.className || 'None'}\n` +
+                        `**CSS Path:** ${result.details.cssPath}\n` +
+                        `**Visible:** ${result.details.isVisible ? 'Yes' : 'No'}\n` +
+                        `**Text Content:** ${result.details.textContent?.substring(0, 100) || 'None'}\n\n`;
+        } else {
+          outputText += `**Error:** ${result.error}\n\n`;
+        }
+      }
+    }
+
+    // Build a final content array that includes the code block as context
+    const finalContent = [
+      {
+        type: 'text' as const,
+        text: `### Ran Playwright code\n\n\`\`\`js\n${code.join('\n')}\n\`\`\``,
+      },
+      {
+        type: 'text' as const,
+        text: outputText,
+      }
+    ];
+
+    // Return resultOverride to suppress console messages added by Context.run
     return {
       code,
-      action: async () => {
-        const results = [];
-        
-        for (const element of elementsToInspect) {
-          try {
-            const locator = snapshot.refLocator(element);
-            
-            // Get the resolved selector
-            const resolvedSelector = await generateLocator(locator);
-            
-            // Get element details
-            const elementDetails = await locator.evaluate((el: Element) => {
-              const getPath = (element: Element): string => {
-                const path: string[] = [];
-                let current = element;
-                
-                while (current && current !== document.body) {
-                  let selector = current.tagName.toLowerCase();
-                  
-                  if (current.id) {
-                    selector += `#${current.id}`;
-                  } else if (current.className) {
-                    const classes = Array.from(current.classList).join('.');
-                    selector += `.${classes}`;
-                  }
-                  
-                  // Add nth-child if needed
-                  const siblings = Array.from(current.parentElement?.children || []);
-                  const index = siblings.indexOf(current) + 1;
-                  if (siblings.length > 1) {
-                    selector += `:nth-child(${index})`;
-                  }
-                  
-                  path.unshift(selector);
-                  current = current.parentElement!;
-                }
-                
-                return path.join(' > ');
-              };
-
-              return {
-                tagName: el.tagName,
-                id: el.id || null,
-                className: el.className || null,
-                textContent: el.textContent?.trim().substring(0, 200) || null,
-                attributes: Object.fromEntries([...el.attributes].map(attr => [attr.name, attr.value])),
-                outerHTML: el.outerHTML,
-                innerHTML: el.innerHTML.substring(0, 500),
-                cssPath: getPath(el),
-                boundingBox: el.getBoundingClientRect(),
-                isVisible: 'offsetParent' in el ? el.offsetParent !== null : true,
-                computedStyles: {
-                  display: getComputedStyle(el).display,
-                  visibility: getComputedStyle(el).visibility,
-                  opacity: getComputedStyle(el).opacity,
-                  position: getComputedStyle(el).position,
-                  zIndex: getComputedStyle(el).zIndex,
-                }
-              };
-            });
-
-            // Apply HTML sanitization to the element details
-            if (elementDetails.outerHTML) {
-              elementDetails.outerHTML = sanitizeHTML(elementDetails.outerHTML, sanitizeConfig.maxOuterHTMLLength);
-            }
-            if (elementDetails.innerHTML) {
-              elementDetails.innerHTML = sanitizeHTML(elementDetails.innerHTML, sanitizeConfig.maxInnerHTMLLength);
-            }
-
-            results.push({
-              element: element.element,
-              ref: element.ref,
-              resolvedSelector,
-              details: elementDetails,
-              success: true
-            });
-          } catch (error) {
-            results.push({
-              element: element.element,
-              ref: element.ref,
-              error: error instanceof Error ? error.message : String(error),
-              success: false
-            });
-          }
-        }
-
-        // Format the results
-        let outputText = '';
-        
-        if (results.length === 1) {
-          const result = results[0];
-          if (result.success && result.details) {
-            outputText = `# Element Inspection Results for "${result.element}"\n\n` +
-                        `## Reference: ${result.ref}\n` +
-                        `## Resolved Selector: ${result.resolvedSelector}\n\n` +
-                        `## Element Details:\n` +
-                        `- **Tag Name:** ${result.details.tagName}\n` +
-                        `- **ID:** ${result.details.id || 'None'}\n` +
-                        `- **Class:** ${result.details.className || 'None'}\n` +
-                        `- **CSS Path:** ${result.details.cssPath}\n` +
-                        `- **Visible:** ${result.details.isVisible ? 'Yes' : 'No'}\n` +
-                        `- **Position:** ${result.details.boundingBox ? `x: ${result.details.boundingBox.x}, y: ${result.details.boundingBox.y}, width: ${result.details.boundingBox.width}, height: ${result.details.boundingBox.height}` : 'Not available'}\n\n` +
-                        `## Computed Styles:\n` +
-                        `- **Display:** ${result.details.computedStyles.display}\n` +
-                        `- **Visibility:** ${result.details.computedStyles.visibility}\n` +
-                        `- **Opacity:** ${result.details.computedStyles.opacity}\n` +
-                        `- **Position:** ${result.details.computedStyles.position}\n` +
-                        `- **Z-Index:** ${result.details.computedStyles.zIndex}\n\n` +
-                        `## Text Content:\n${result.details.textContent || 'None'}\n\n` +
-                        `## Attributes:\n${JSON.stringify(result.details.attributes, null, 2)}\n\n` +
-                        `## Outer HTML:\n\`\`\`html\n${result.details.outerHTML}\n\`\`\`\n\n` +
-                        `## Inner HTML:\n\`\`\`html\n${result.details.innerHTML}\n\`\`\`\n\n` +
-                        `> **Note:** HTML content has been sanitized for security. SVG elements, scripts, styles, and potentially sensitive attributes have been removed.`;
-          } else {
-            outputText = `Error inspecting element "${result.element}" with reference "${result.ref}": ${result.error}`;
-          }
-        } else {
-          outputText = `# Batch Element Inspection Results (${results.length} elements)\n\n` +
-                        `> **Note:** HTML content has been sanitized for security. SVG elements, scripts, styles, and potentially sensitive attributes have been removed.\n\n`;
-          
-          for (let i = 0; i < results.length; i++) {
-            const result = results[i];
-            outputText += `## ${i + 1}. ${result.element}\n`;
-            outputText += `**Reference:** ${result.ref}\n\n`;
-            
-            if (result.success && result.details) {
-              outputText += `**Resolved Selector:** ${result.resolvedSelector}\n` +
-                            `**Tag Name:** ${result.details.tagName}\n` +
-                            `**ID:** ${result.details.id || 'None'}\n` +
-                            `**Class:** ${result.details.className || 'None'}\n` +
-                            `**CSS Path:** ${result.details.cssPath}\n` +
-                            `**Visible:** ${result.details.isVisible ? 'Yes' : 'No'}\n` +
-                            `**Text Content:** ${result.details.textContent?.substring(0, 100) || 'None'}\n\n`;
-            } else {
-              outputText += `**Error:** ${result.error}\n\n`;
-            }
-          }
-        }
-
-        return {
-          content: [
-            { 
-              type: 'text', 
-              text: outputText
-            }
-          ],
-        };
-      },
       captureSnapshot: false,
       waitForNetwork: false,
+      resultOverride: {
+        content: finalContent,
+      },
     };
   },
 });
