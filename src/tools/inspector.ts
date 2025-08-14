@@ -1,5 +1,7 @@
 /**
-      // All matching is now done through semantic similarityder the Apache License, Version 2.0 (the "License");
+ * Copyright (c) Microsoft Corporation.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
@@ -15,8 +17,112 @@
 import { z } from 'zod';
 // @ts-ignore
 import natural from 'natural';
+// @ts-ignore
+import sanitize from 'html-sanitize';
 import { defineTool } from './tool.js';
 import { generateLocator } from './utils.js';
+
+// HTML sanitization configuration for the inspector tool
+const sanitizeConfig = {
+  // Remove SVG elements and other potentially irrelevant elements
+  allowedTags: [
+    'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'a', 'button', 'input', 'textarea', 'select', 'option',
+    'form', 'label', 'ul', 'ol', 'li', 'table', 'tr', 'td', 'th',
+    'img', 'iframe', 'section', 'article', 'header', 'footer',
+    'nav', 'main', 'aside', 'figure', 'figcaption', 'blockquote',
+    'code', 'pre', 'em', 'strong', 'b', 'i', 'u', 'mark', 'small'
+  ],
+  // Remove potentially sensitive or irrelevant attributes
+  allowedAttributes: {
+    'div': ['class', 'id', 'data-*'],
+    'span': ['class', 'id', 'data-*'],
+    'p': ['class', 'id'],
+    'h1': ['class', 'id'],
+    'h2': ['class', 'id'],
+    'h3': ['class', 'id'],
+    'h4': ['class', 'id'],
+    'h5': ['class', 'id'],
+    'h6': ['class', 'id'],
+    'a': ['href', 'class', 'id', 'target', 'rel'],
+    'button': ['class', 'id', 'type', 'disabled', 'aria-*'],
+    'input': ['class', 'id', 'type', 'name', 'value', 'placeholder', 'disabled', 'required', 'aria-*'],
+    'textarea': ['class', 'id', 'name', 'placeholder', 'disabled', 'required', 'aria-*'],
+    'select': ['class', 'id', 'name', 'disabled', 'required', 'aria-*'],
+    'option': ['class', 'id', 'value', 'selected', 'disabled'],
+    'form': ['class', 'id', 'action', 'method', 'enctype'],
+    'label': ['class', 'id', 'for', 'aria-*'],
+    'ul': ['class', 'id'],
+    'ol': ['class', 'id'],
+    'li': ['class', 'id'],
+    'table': ['class', 'id'],
+    'tr': ['class', 'id'],
+    'td': ['class', 'id', 'colspan', 'rowspan'],
+    'th': ['class', 'id', 'colspan', 'rowspan'],
+    'img': ['class', 'id', 'src', 'alt', 'width', 'height'],
+    'iframe': ['class', 'id', 'src', 'width', 'height', 'frameborder'],
+    'section': ['class', 'id'],
+    'article': ['class', 'id'],
+    'header': ['class', 'id'],
+    'footer': ['class', 'id'],
+    'nav': ['class', 'id'],
+    'main': ['class', 'id'],
+    'aside': ['class', 'id'],
+    'figure': ['class', 'id'],
+    'figcaption': ['class', 'id'],
+    'blockquote': ['class', 'id', 'cite'],
+    'code': ['class', 'id'],
+    'pre': ['class', 'id'],
+    'em': ['class', 'id'],
+    'strong': ['class', 'id'],
+    'b': ['class', 'id'],
+    'i': ['class', 'id'],
+    'u': ['class', 'id'],
+    'mark': ['class', 'id'],
+    'small': ['class', 'id']
+  },
+  // Remove all SVG elements and their attributes, plus script and style tags
+  removeTags: ['script', 'style', 'noscript', 'object', 'embed', 'applet', 'base', 'basefont', 'bgsound', 'link', 'meta', 'title', 'head', 'html', 'body', 'svg', 'path', 'circle', 'rect', 'polygon', 'line', 'g', 'defs', 'clipPath', 'mask', 'filter', 'feGaussianBlur', 'feOffset', 'feMerge', 'feMergeNode', 'feComposite', 'feBlend', 'feColorMatrix', 'feComponentTransfer', 'feFuncR', 'feFuncG', 'feFuncB', 'feFuncA', 'feConvolveMatrix', 'feDiffuseLighting', 'feSpecularLighting', 'feDistantLight', 'fePointLight', 'feSpotLight', 'feTile', 'feTurbulence', 'feMorphology', 'feImage', 'feDisplacementMap', 'feFlood', 'feDropShadow', 'feTurbulence', 'feMorphology', 'feImage', 'feDisplacementMap', 'feFlood', 'feDropShadow'],
+  // Remove potentially sensitive attributes
+  removeAttributes: ['onclick', 'onload', 'onerror', 'onmouseover', 'onmouseout', 'onfocus', 'onblur', 'onchange', 'onsubmit', 'onreset', 'onkeydown', 'onkeyup', 'onkeypress', 'onmousedown', 'onmouseup', 'onmousemove', 'oncontextmenu', 'onabort', 'onbeforeunload', 'onerror', 'onhashchange', 'onmessage', 'onoffline', 'ononline', 'onpagehide', 'onpageshow', 'onpopstate', 'onresize', 'onstorage', 'onunload', 'onbeforeprint', 'onafterprint', 'oncanplay', 'oncanplaythrough', 'oncuechange', 'ondurationchange', 'onemptied', 'onended', 'onloadeddata', 'onloadedmetadata', 'onloadstart', 'onpause', 'onplay', 'onplaying', 'onprogress', 'onratechange', 'onreadystatechange', 'onseeked', 'onseeking', 'onstalled', 'onsuspend', 'ontimeupdate', 'onvolumechange', 'onwaiting', 'onwheel', 'oncopy', 'oncut', 'onpaste', 'onselect', 'onselectstart', 'onbeforecopy', 'onbeforecut', 'onbeforepaste', 'onbeforeinput', 'oninput', 'oninvalid', 'onsearch', 'onwebkitanimationstart', 'onwebkitanimationend', 'onwebkitanimationiteration', 'onwebkittransitionend', 'ontransitionend', 'onanimationstart', 'onanimationend', 'onanimationiteration', 'ontransitionstart', 'ontransitionrun', 'ontransitioncancel', 'onanimationcancel', 'onanimationstart', 'onanimationend', 'onanimationiteration', 'ontransitionstart', 'ontransitionrun', 'ontransitioncancel', 'onanimationcancel'],
+  // Keep only essential data attributes
+  allowedDataAttributes: ['data-testid', 'data-test', 'data-cy', 'data-qa', 'data-automation', 'data-id', 'data-name', 'data-value', 'data-type', 'data-label', 'data-title', 'data-description', 'data-placeholder', 'data-required', 'data-disabled', 'data-hidden', 'data-visible', 'data-selected', 'data-checked', 'data-expanded', 'data-collapsed', 'data-open', 'data-closed', 'data-active', 'data-inactive', 'data-current', 'data-previous', 'data-next', 'data-first', 'data-last', 'data-index', 'data-position', 'data-size', 'data-width', 'data-height', 'data-color', 'data-theme', 'data-mode', 'data-state', 'data-status', 'data-level', 'data-priority', 'data-category', 'data-tag', 'data-group', 'data-role', 'data-aria', 'data-accessibility', 'data-semantic', 'data-meaning', 'data-purpose', 'data-function', 'data-behavior', 'data-interaction', 'data-event', 'data-action', 'data-result', 'data-output', 'data-input', 'data-form', 'data-field', 'data-section', 'data-container', 'data-wrapper', 'data-content', 'data-header', 'data-footer', 'data-sidebar', 'data-main', 'data-aside', 'data-navigation', 'data-menu', 'data-list', 'data-item', 'data-entry', 'data-record', 'data-row', 'data-column', 'data-cell', 'data-table', 'data-grid', 'data-chart', 'data-graph', 'data-image', 'data-media', 'data-video', 'data-audio', 'data-document', 'data-file', 'data-link', 'data-button', 'data-input', 'data-select', 'data-textarea', 'data-checkbox', 'data-radio', 'data-toggle', 'data-switch', 'data-slider', 'data-progress', 'data-meter', 'data-gauge', 'data-indicator', 'data-badge', 'data-tooltip', 'data-popover', 'data-modal', 'data-dialog', 'data-drawer', 'data-panel', 'data-tab', 'data-accordion', 'data-carousel', 'data-slider', 'data-gallery', 'data-lightbox', 'data-dropdown', 'data-menu', 'data-tree', 'data-breadcrumb', 'data-pagination', 'data-calendar', 'data-datepicker', 'data-timepicker', 'data-colorpicker', 'data-fileupload', 'data-dragdrop', 'data-sortable', 'data-resizable', 'data-draggable', 'data-droppable', 'data-sortable', 'data-resizable', 'data-draggable', 'data-droppable'],
+  // Maximum length limits for HTML content
+  maxOuterHTMLLength: 2000,
+  maxInnerHTMLLength: 1500,
+  maxTextContentLength: 300,
+  maxAttributesCount: 10,
+  maxChildrenCount: 20,
+  maxTreeDepth: 3,
+  maxAttributeValueLength: 100,
+  compactMode: true
+};
+
+// Helper function to sanitize HTML content
+function sanitizeHTML(html: string, maxLength: number = 2000): string {
+  if (!html || html.length === 0) return '';
+  
+  // Truncate HTML if it's too long before sanitization
+  let truncatedHTML = html;
+  if (html.length > maxLength) {
+    truncatedHTML = html.substring(0, maxLength) + '...';
+  }
+  
+  try {
+    // Apply sanitization with our custom configuration
+    const sanitized = sanitize(truncatedHTML, sanitizeConfig);
+    
+    // Additional post-processing to ensure clean output
+    return sanitized
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .replace(/>\s+</g, '><') // Remove whitespace between tags
+      .trim();
+  } catch (error) {
+    // If sanitization fails, return a safe fallback
+    console.warn('HTML sanitization failed:', error);
+    return html.substring(0, Math.min(maxLength, 500)) + '...';
+  }
+}
 
 const inspectElementSchema = z.object({
   element: z.string().describe('Human-readable element description used to obtain permission to interact with the element'),
@@ -126,6 +232,14 @@ const inspectElement = defineTool({
               };
             });
 
+            // Apply HTML sanitization to the element details
+            if (elementDetails.outerHTML) {
+              elementDetails.outerHTML = sanitizeHTML(elementDetails.outerHTML, sanitizeConfig.maxOuterHTMLLength);
+            }
+            if (elementDetails.innerHTML) {
+              elementDetails.innerHTML = sanitizeHTML(elementDetails.innerHTML, sanitizeConfig.maxInnerHTMLLength);
+            }
+
             results.push({
               element: element.element,
               ref: element.ref,
@@ -168,12 +282,14 @@ const inspectElement = defineTool({
                         `## Text Content:\n${result.details.textContent || 'None'}\n\n` +
                         `## Attributes:\n${JSON.stringify(result.details.attributes, null, 2)}\n\n` +
                         `## Outer HTML:\n\`\`\`html\n${result.details.outerHTML}\n\`\`\`\n\n` +
-                        `## Inner HTML:\n\`\`\`html\n${result.details.innerHTML}\n\`\`\``;
+                        `## Inner HTML:\n\`\`\`html\n${result.details.innerHTML}\n\`\`\`\n\n` +
+                        `> **Note:** HTML content has been sanitized for security. SVG elements, scripts, styles, and potentially sensitive attributes have been removed.`;
           } else {
             outputText = `Error inspecting element "${result.element}" with reference "${result.ref}": ${result.error}`;
           }
         } else {
-          outputText = `# Batch Element Inspection Results (${results.length} elements)\n\n`;
+          outputText = `# Batch Element Inspection Results (${results.length} elements)\n\n` +
+                        `> **Note:** HTML content has been sanitized for security. SVG elements, scripts, styles, and potentially sensitive attributes have been removed.\n\n`;
           
           for (let i = 0; i < results.length; i++) {
             const result = results[i];
