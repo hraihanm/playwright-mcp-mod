@@ -57,6 +57,18 @@ An attempt to extend/modify MCP tools for personal purpose
     - Supports batch verification
 - **Read-only:** true
 
+#### ✨ browser_download_page
+
+- **Purpose:**
+  - Download the current page HTML or a specific URL and save it to a local file.
+- **Usage:**
+  - Provide `url` to navigate and save that page, or omit it to save the active tab (from a prior `browser_navigate`).
+  - Provide `filename` to control the saved name/path; if no extension is provided, `.html` is added. `.html` and `.htm` are equivalent; `.html` is preferred.
+- **Parameters:**
+  - `url` (string, optional): The URL to download. If omitted, uses the currently active tab.
+  - `filename` (string, optional): File name to save the HTML to. Defaults to `page-{timestamp}.html`.
+- **Read-only:** true
+
 #### ✨ browser_inspect_element
 
 - **Purpose:**
