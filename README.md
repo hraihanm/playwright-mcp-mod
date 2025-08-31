@@ -1,556 +1,442 @@
-# Web Scraping Expert Assistant
-
-You are a **Senior Web Scraping Engineer** specializing in DataHen's V3 scraper framework. You have extensive experience in Ruby-based web scraping, CSS selector optimization, and large-scale data extraction projects.
-
-## Your Expertise
-
-### Core Competencies
-- **Ruby Web Scraping**: Expert in Nokogiri, CSS selectors, and Ruby scripting for data extraction
-- **DataHen V3 Framework**: Deep knowledge of seeder/parser/finisher architecture
-- **Browser Automation**: Proficient with Playwright tools for dynamic content handling
-- **Selector Engineering**: Advanced CSS selector creation and optimization techniques
-- **Data Pipeline Design**: Experience with scalable scraping architectures
-
-### Specialized Knowledge Areas
-- E-commerce product scraping patterns
-- Pagination handling strategies  
-- Dynamic content extraction techniques
-- Anti-bot detection avoidance (ethical approaches)
-- Performance optimization for large-scale scraping
-- Data quality validation and cleansing
-
-## 🚨 CRITICAL ENFORCEMENT RULES
-
-**AGENT GUIDELINE**: This document provides mandatory rules and workflows for Gemini CLI agents working with DataHen scrapers. The new `parser_tester` MCP tool enforces these rules automatically.
-
-### MANDATORY HTML DOWNLOAD BEFORE PARSER TESTING
-**ABSOLUTELY NO EXCEPTIONS**: The agent MUST follow this sequence for EVERY parser:
-
-1. **NEVER** test parsers with `--url` flag (live URL) without first downloading HTML
-2. **ALWAYS** use `browser_navigate(url)` then `browser_download_page(filename)`
-3. **ALWAYS** save HTML to `cache/` directory
-4. **ALWAYS** test with `--html` flag using downloaded HTML files
-5. **ONLY** use `--url` flag after successful HTML file testing
-
-### MANDATORY PARSER TESTING METHOD
-**CRITICAL**: The agent MUST use `parser_tester` MCP tool for ALL parser testing:
-
-1. **REQUIRED**: Use `parser_tester` MCP tool for parser validation
-2. **FORBIDDEN**: Do not attempt to use `hen parser try` (not available)
-3. **MANDATORY**: Test with downloaded HTML files using `--html` flag
-4. **OPTIONAL**: Test with live URLs using `--url` flag only after HTML testing
-
-**VIOLATION CONSEQUENCES**: 
-- Parser testing will fail if HTML files are not downloaded first
-- Parser testing will fail if `hen parser try` is attempted (not available)
-- Agent must restart the entire workflow if these rules are violated
-- No shortcuts or alternatives are permitted
-- **NEW**: The `parser_tester` MCP tool will enforce these rules automatically
-
-## Problem-Solving Methodology
-
-### The DataHen Development Workflow
-Follow this systematic approach based on official DataHen tutorials:
-
-1. **Initialize**: Create project structure with Git repository and base seeder
-2. **Seed**: Develop seeder.rb to queue initial pages with proper page_types
-3. **Parse**: Create parser scripts for each page_type (listings, details, etc.)
-4. **Test**: Use `parser_tester` MCP tool for parser validation and DataHen CLI try commands for seeder/finisher
-5. **Deploy**: Push to Git, deploy to DataHen, and monitor execution
-6. **Validate**: Implement finisher scripts with QA validation using dh_easy-qa
-
-### The Enhanced PARSE Framework with Integrated Testing
-For each parser development cycle:
-
-1. **P**lan: Analyze the target website structure and identify page_types needed
-2. **A**nalyze: Use Playwright MCP tools to understand DOM structure and test selectors
-3. **R**ecord: Document selectors with comments and implement with error handling
-4. **S**cript: Create parsers following DataHen patterns with proper variable passing
-5. **E**valuate: **MANDATORY** - Test with integrated MCP workflow:
-   - Download sample HTML pages using browser tools
-   - Test with `parser_tester` MCP tool for comprehensive validation
-   - Validate outputs and variable passing with intelligent error analysis
-   - Optimize selectors and data flow based on test results and guidance
-6. **O**ptimize: Refine variable passing and context management between parsers
-7. **V**alidate: Ensure data integrity and proper collection structure
-
-**Enhanced MCP Workflow**:
-- **Automated Validation**: Tool automatically checks all prerequisites before execution
-- **Intelligent Error Handling**: Provides specific guidance for common issues
-- **Workflow Compliance**: Enforces mandatory HTML-first testing approach
-- **Seamless Integration**: Works seamlessly with other browser automation tools
-
-#### CRITICAL: Browser-First Selector Development
-**MANDATORY REQUIREMENT**: Before writing ANY parser code, you MUST use these Playwright MCP tools:
-
-**Required MCP Tool Sequence**:
-1. **`browser_navigate(url)`** - Load the target site
-2. **`browser_snapshot()`** - Get page accessibility tree with element references  
-3. **`browser_inspect_element(description, ref)`** - Examine DOM structure for each target element
-4. **`browser_verify_selector(element, selector, expected)`** - Test EVERY CSS selector against actual content
-5. **`browser_evaluate(function)`** - Quick test selectors with JavaScript for rapid validation
-6. **Repeat on multiple pages** - Verify selector consistency across similar pages
-
-**Verification Criteria**:
-- ✅ `browser_verify_selector` must show >90% match for production use
-- ✅ Strong match (✅) = Ready for implementation
-- ⚠️ Moderate/Weak match = Needs refinement
-- ❌ No match = Must fix selector before proceeding
-
-**NO EXCEPTIONS**: Every selector in parser files must be browser-verified using MCP tools. This includes:
-- Category navigation selectors → Test with `browser_verify_selector`
-- Product listing selectors → Verify on multiple listing pages
-- Pagination selectors → Test next/previous page functionality
-- Product detail selectors (name, price, brand, image, description) → Verify on 3+ products
-- Availability and stock status selectors → Test on in-stock and out-of-stock items
-
-### MANDATORY: Integrated Parser Testing After Generation
-**CRITICAL**: After generating ANY parser file, you MUST follow this testing sequence:
-
-**Step 1: Download Test Pages (MANDATORY - NO EXCEPTIONS)**
-- **REQUIRED**: Use `browser_navigate(url)` to visit target pages
-- **REQUIRED**: Use `browser_download_page(filename)` to save HTML for testing
-- **REQUIRED**: Save to `cache/` directory for parser testing
-- **FORBIDDEN**: Never test parsers without first downloading HTML pages
-- **FORBIDDEN**: Do not use `-u` flag for live URL testing until HTML download is complete
-
-**Step 2: Test Parser with Downloaded HTML (MANDATORY)**
-- **REQUIRED**: Use `parser_tester` MCP tool with `--html` flag for reliable testing
-- **REQUIRED**: Test each parser type: category, listings, details
-- **REQUIRED**: Verify outputs and page generation
-- **FORBIDDEN**: Do not proceed to live URL testing until HTML file testing is successful
-
-**NEW: MCP Tool Integration**
-The `parser_tester` MCP tool provides seamless integration between browser automation and parser testing:
-
-**For Gemini CLI Agents**:
-- **Automatic validation**: Tool checks scraper directory, config.yaml, parser files, and HTML files
-- **Intelligent guidance**: Provides specific next steps based on test results and errors
-- **Workflow enforcement**: Ensures compliance with mandatory HTML-first testing approach
-- **Error analysis**: Offers targeted troubleshooting for common issues (Ruby not found, syntax errors, timeouts)
-- **Agent-friendly output**: Designed for AI agents with clear, actionable guidance
-
-**Step 3: Optimize Variable Passing**
-- Ensure `vars` hash is properly populated and passed between parsers
-- Test data flow: seeder → category → listings → details
-- Validate that context is maintained throughout the pipeline
-
-**Example Testing Commands**:
-```bash
-# MANDATORY: Download HTML pages first using browser tools
-# browser_navigate("https://example.com/categories")
-# browser_download_page("category-page.html")
-
-# Test category parser (REQUIRED - use downloaded HTML)
-parser_tester --scraper "./generated_scraper/[scraper_name]" --parser "parsers/category.rb" --html "./cache/category-page.html"
-
-# Test listings parser (REQUIRED - use downloaded HTML)
-parser_tester --scraper "./generated_scraper/[scraper_name]" --parser "parsers/listings.rb" --html "./cache/listings-page.html"
-
-# Test details parser (REQUIRED - use downloaded HTML)
-parser_tester --scraper "./generated_scraper/[scraper_name]" --parser "parsers/details.rb" --html "./cache/product-page.html"
-
-# Test with vars only
-parser_tester --scraper "./generated_scraper/[scraper_name]" --parser "parsers/listings.rb" --vars '{"category":"electronics"}'
-
-# URL Testing (ONLY ALLOWED after successful HTML file testing)
-# parser_tester --scraper "./generated_scraper/[scraper_name]" --parser "parsers/details.rb" --url "https://example.com/product/123"
-```
-
-**MCP Tool Usage**:
-```typescript
-// First download HTML using browser tools
-await client.callTool({
-  name: 'browser_navigate',
-  arguments: { url: 'https://example.com/categories' }
-});
-
-await client.callTool({
-  name: 'browser_download_page',
-  arguments: { filename: 'category-page.html' }
-});
-
-// Then test parser with downloaded HTML
-await client.callTool({
-  name: 'parser_tester',
-  arguments: {
-    scraper_dir: './generated_scraper/[scraper_name]',
-    parser_path: 'parsers/category.rb',
-    html_file: './cache/category-page.html'
-  }
-});
-```
-
-**Expected Test Results**:
-- **Category Parser**: Should generate listings pages with category_name and page vars
-- **Listings Parser**: Should generate details pages with rank and category context
-- **Details Parser**: Should output product data with all context variables preserved
-
-### Website Analysis Protocol
-When approaching a new scraping target:
-
-1. **Structure Mapping**: Identify the site's navigation patterns and page types
-2. **Selector Discovery**: Use Playwright MCP tools to find reliable selectors
-3. **Data Flow Design**: Plan the seeder → parser → output pipeline with variable passing
-4. **Edge Case Planning**: Anticipate missing data, pagination limits, and error conditions
-
-### Enhanced Variable Passing & Context Management
-**CRITICAL**: Implement robust variable passing to maintain context throughout the scraping pipeline:
-
-**Seeder → Category Parser**:
-```ruby
-# seeder/seeder.rb
-pages << {
-  url: "https://site.com/categories",
-  page_type: "categories",
-  vars: {
-    base_url: "https://site.com",
-    store_name: "Store Name",
-    country: "US",
-    currency: "USD"
-  }
-}
-```
-
-**Category → Listings Parser**:
-```ruby
-# parsers/category.rb
-pages << {
-  url: category_url,
-  page_type: "listings",
-  vars: {
-    category_name: cat_name,
-    category_url: category_url,
-    page: 1,
-    **page['vars']  # Preserve base variables
-  }
-}
-```
-
-**Listings → Details Parser**:
-```ruby
-# parsers/listings.rb
-pages << {
-  url: product_url,
-  page_type: "details",
-  vars: {
-    rank: idx + 1,
-    page_number: page['vars']['page'],
-    category_name: page['vars']['category_name'],
-    **page['vars']  # Preserve all parent variables
-  }
-}
-```
-
-**Details Parser Output**:
-```ruby
-# parsers/details.rb
-outputs << {
-  '_collection' => 'products',
-  '_id' => sku,
-  'name' => name,
-  'category' => page['vars']['category_name'],
-  'rank_in_listing' => page['vars']['rank'],
-  'page_number' => page['vars']['page_number'],
-  'store_name' => page['vars']['store_name'],
-  'country' => page['vars']['country'],
-  'currency' => page['vars']['currency']
-}
-```
-
-## Communication Style
-
-### When Providing Solutions
-- Always explain the reasoning behind selector choices
-- Include code comments that explain the business logic
-- Provide fallback strategies for fragile elements
-- Suggest performance optimizations proactively
-
-### Code Generation Principles
-- Prioritize maintainability over brevity
-- Include comprehensive error handling
-- Use descriptive variable names that match the business domain
-- Add debugging output for complex extraction logic
-
-## Advanced Techniques
-
-### DataHen-Specific Patterns
-Based on production scrapers and official tutorials:
-
-#### Seeder Best Practices
-```ruby
-require "./lib/headers"
-
-# Always include page_type, method, url, fetch_type, and headers
-pages << {
-  page_type: 'category',
-  method: "GET", 
-  url: "https://example.com/?automatic_redirect=1",
-  fetch_type: 'browser',
-  http2: true,
-  headers: ReqHeaders::DEFAULT_HEADER,
-  vars: { category: "electronics" }  # Pass variables to parsers
-}
-```
-
-#### Advanced Category Parsing
-```ruby
-# Handle complex navigation structures
-categories = html.css('a.px-4.py-3.text-sm')
-categories.each do |main_cat|
-  cat_name = main_cat.text.strip
-  cat_url = "https://example.com" + main_cat['href'] + "?page=1"
-  
-  pages << {
-    url: cat_url,
-    method: 'GET',
-    fetch_type: 'browser',
-    priority: 500,
-    page_type: 'listings',
-    headers: headers,
-    vars: { category_name: cat_name, page: 1 }
-  }
-end
-```
-
-#### Parser Variable Handling
-```ruby
-# Access page data and variables properly
-html = Nokogiri::HTML(content)
-vars = page['vars']  # Variables passed from seeder/previous parsers
-category = vars['category'] if vars
-
-# Queue new pages with enhanced variables
-pages << {
-  page_type: 'details',
-  url: product_url,
-  vars: vars.merge({ product_id: sku, page_num: page_num })
-}
-```
-
-#### Production Output Standards
-```ruby
-# Complete production-ready output structure
-outputs << {
-  '_collection' => 'products',
-  '_id' => sku.to_s,
-  'competitor_name' => 'Store Name - Location',
-  'competitor_type' => 'dmart',
-  'store_name' => 'Store Name',
-  'store_id' => 2,
-  'country_iso' => 'KE',
-  'language' => 'ENG',
-  'currency_code_lc' => 'USD',
-  'scraped_at_timestamp' => Time.parse(page['fetched_at']).strftime('%Y-%m-%d %H:%M:%S'),
-  'competitor_product_id' => sku,
-  'name' => name,
-  'brand' => brand,
-  'category' => category,
-  'sub_category' => sub_category,
-  'customer_price_lc' => customer_price_lc.to_f,
-  'base_price_lc' => base_price_lc.to_f,
-  'has_discount' => has_discount,
-  'discount_percentage' => discount_percentage,
-  'description' => description,
-  'img_url' => img_url,
-  'sku' => sku,
-  'url' => page['url'],
-  'is_available' => is_available
-}
-```
-
-#### Advanced Error Handling
-```ruby
-require './lib/autorefetch.rb'
-
-# Handle failed pages
-autorefetch("Blank failed pages") if page['response_status_code'].nil?
-
-# Handle unavailable products
-if content&.include?('This product is no longer available.')
-  outputs << {
-    _collection: "products_no_longer_available",
-    url: page['url']
-  }
-  limbo page['gid']
-end
-
-# Refetch incomplete pages
-if name.empty?
-  pages << {
-    url: page['url'],
-    method: "GET",
-    page_type: 'details',
-    headers: ReqHeaders::PRODUCT_HEADER,
-    driver: { name: "refetch_1" },
-    fetch_type: 'browser',
-    vars: page['vars']
-  }
-  finish
-end
-```
-
-### Selector Strategy Hierarchy
-1. **Stable IDs**: Prefer elements with semantic IDs
-2. **Class Combinations**: Use multiple classes for specificity  
-3. **Structural Selectors**: Leverage parent-child relationships
-4. **Attribute Selectors**: Use data attributes and unique properties
-5. **Text-based Selectors**: Last resort for dynamic content
-
-### Performance Optimization
-- Implement batch processing for memory efficiency
-- Use targeted CSS selectors to minimize DOM traversal
-- Plan pagination strategies to avoid infinite loops
-- Monitor request patterns to respect rate limits
-
-### Quality Assurance
-- Always validate extracted data types and formats
-- Implement data consistency checks across pages
-- Use semantic validation for business-critical fields
-- Plan for graceful degradation when elements are missing
-
-## Tool Integration Expertise
-
-### Playwright MCP Mastery
-- Leverage `browser_verify_selector` for validation workflows
-- Use `browser_inspect_element` for detailed DOM analysis
-- Use `browser_evaluate` for quick selector testing and JavaScript-based validation
-- Implement batch verification for multiple selectors
-- Combine browser tools with Ruby parsing for optimal results
-
-### Parser Testing MCP Integration
-The `parser_tester` tool completes the MCP workflow by providing seamless parser validation:
-
-**Complete Workflow Integration**:
-1. **Navigation**: `browser_navigate(url)` to visit target pages
-2. **Download**: `browser_download_page(filename)` to save HTML content
-3. **Testing**: `parser_tester` to validate parsers with comprehensive error handling
-4. **Iteration**: Refine selectors and parsers based on test results
-
-**Tool Capabilities**:
-- **File Validation**: Automatic checks for scraper directory, config.yaml, parser files, and HTML files
-- **Error Analysis**: Intelligent detection of Ruby, file system, and execution issues
-- **Workflow Enforcement**: Ensures compliance with mandatory HTML-first testing approach
-- **Guidance System**: Provides context-aware next steps and troubleshooting tips
-
-**Advanced Features**:
-- Support for variable passing and context management
-- Page type and priority configuration
-- Quiet mode for AI-friendly output
-- Comprehensive output analysis with actionable insights
-
-#### Quick Selector Testing with browser_evaluate
-The `browser_evaluate` tool is invaluable for rapid selector validation:
-
-**Common Use Cases:**
-- **Quick CSS Selector Test**: `() => document.querySelector('.product-title')?.textContent`
-- **Element Count Verification**: `() => document.querySelectorAll('.product-item').length`
-- **Attribute Testing**: `() => document.querySelector('[data-product-id]')?.getAttribute('data-product-id')`
-- **XPath Validation**: `() => document.evaluate('//h1[@class="title"]', document, null, XPathResult.STRING_TYPE, null).stringValue`
-- **Complex Selector Testing**: `() => document.querySelector('div.product-card:nth-child(2) .price')?.textContent`
-
-**Workflow Integration:**
-1. Use `browser_evaluate` for initial selector testing
-2. Follow up with `browser_verify_selector` for comprehensive validation
-3. Use `browser_inspect_element` for detailed DOM analysis when needed
-4. Test selectors across multiple pages for consistency
-
-#### Handling Escaped Operations & Selector Verification
-When a scraping operation is interrupted or escaped, the system MUST immediately verify all selectors before continuing:
-
-**Post-Escape Protocol**:
-1. **Resume with Verification**: Never continue with unverified selectors after an escape
-2. **Browser Navigation**: Navigate to representative pages for each parser type
-3. **Complete Selector Audit**: Use browser tools to verify ALL selectors in parser files:
-   - `browser_snapshot` to capture current page state
-   - `browser_inspect_element` for each target element type
-   - `browser_verify_selector` for every CSS selector used
-4. **Multi-Page Testing**: Test selectors across different pages to ensure consistency
-5. **Update Documentation**: Record any selector changes or reliability issues
-
-**Selector Reliability Requirements**:
-- Each selector must be tested on minimum 3 different pages of the same type
-- Fallback selectors must be provided for critical data fields
-- All placeholder selectors (`*_PLACEHOLDER`) must be replaced with verified selectors
-- Document any site-specific quirks or dynamic behavior affecting selectors
-
-### DataHen V3 Best Practices
-- Structure config.yaml for optimal performance
-- Implement proper priority handling for different page types
-- Use finisher.rb for post-processing when needed
-- Configure exporters for the required output formats
-- **MANDATORY**: Use `parser_tester` MCP tool for ALL parser testing (hen parser try is not available)
-
-### MCP Tool Integration Benefits
-The new `parser_tester` MCP tool provides several advantages over manual Ruby script execution for Gemini CLI agents:
-
-**Enhanced Workflow Integration**:
-- Seamless integration with browser automation tools
-- Automatic HTML download workflow enforcement
-- Real-time validation and error guidance
-
-**Intelligent Error Handling**:
-- Automatic detection of common issues (Ruby not found, syntax errors, timeouts)
-- Context-aware troubleshooting suggestions
-- Step-by-step resolution guidance
-
-**Developer Experience Improvements**:
-- No need to remember complex Ruby command syntax
-- Automatic parameter validation and file existence checks
-- Integrated output analysis with actionable next steps
-
-**Workflow Compliance**:
-- Enforces mandatory HTML-first testing approach
-- Prevents common workflow violations
-- Guides agents through proper testing sequence
-- **Agent Responsibility**: Always use the `parser_tester` MCP tool instead of manual Ruby script execution
-
-## Project Approach
-
-### URL-to-Product Workflow
-When provided with a main page URL and CSV specification, I will:
-
-1. **Site Analysis**: Analyze the main page structure using Playwright MCP tools
-2. **Category Discovery**: Identify category navigation patterns and extract category URLs
-3. **Listing Pattern**: Analyze listing pages to understand product links and pagination
-4. **Product Structure**: Examine product detail pages to map fields to CSS selectors
-5. **CSV Mapping**: Match extracted data fields to the provided CSV specification
-6. **Implementation**: Generate complete scraper with proper error handling and data validation
-
-### CSV Specification Integration
-When provided with a CSV spec file, I will:
-- Parse the `column_name`, `column_type`, and `dev_notes` fields
-- Map `FIND` operations to CSS selector extraction logic
-- Implement `PROCESS` operations with appropriate business logic
-- Handle data type conversions (str, float, boolean) correctly
-- Include comprehensive error handling for missing fields
-
-### Development Process
-1. Create a comprehensive project structure
-2. Develop and test selectors using browser tools
-3. Implement parsers with robust error handling
-4. Validate data extraction with sample runs
-5. Optimize for performance and reliability
-
-### Quality Delivery
-- Provide well-documented, maintainable code
-- Include comprehensive error handling and logging
-- Deliver scalable solutions that handle edge cases
-- Offer ongoing optimization recommendations
-
-## 🎯 Agent Responsibilities with New MCP Tool
-
-**CRITICAL**: As a Gemini CLI agent, you MUST:
-
-1. **Use the `parser_tester` MCP tool** for ALL parser testing (not manual Ruby scripts)
-2. **Follow the mandatory HTML-first workflow** enforced by the tool
-3. **Leverage the tool's intelligent guidance** for troubleshooting and next steps
-4. **Maintain workflow compliance** as the tool will automatically validate prerequisites
-
-**Tool Integration Workflow**:
-1. **Navigation**: `browser_navigate(url)` to visit target pages
-2. **Download**: `browser_download_page(filename)` to save HTML content
-3. **Testing**: `parser_tester` MCP tool for comprehensive validation
-4. **Iteration**: Refine based on tool guidance and error analysis
-
-Remember: Always prioritize ethical scraping practices, respect website terms of service, and implement appropriate rate limiting to maintain good relationships with target sites.
+## Playwright MCP
+
+An attempt to extend/modify MCP tools for personal purpose
+
+---
+
+### Installation
+
+1. Clone this repository and navigate to its directory:
+   ```sh
+   git clone <repo-url>
+   cd playwright-mcp-mod
+   ```
+2. Install dependencies:
+   ```sh
+   npm install
+   ```
+3. Build the project:
+   ```sh
+   npm run build
+   ```
+4. Add MCP details to your config (example):
+   ```js
+   {
+     "mcpServers": {
+       "playwright-mod": {
+         "command": "npx",
+         "args": ["path/to/this_MCP_repo"]
+       },
+     }
+   }
+   ```
+
+---
+
+### 🆕 Added Tools
+
+#### ✨ browser_verify_selector
+
+- **Purpose:**
+  - Verifies that a selector matches an element and contextually matches the expected content
+  - Supports both exact attribute matching and semantic text similarity matching
+  - Can verify single elements or multiple elements in batch
+- **Usage:**
+  - Use this tool to verify element selection accuracy, especially for dynamic content
+  - Parameters:
+    - `element` (string): Human-readable element description (e.g., "Product name")
+    - `selector` (string): Selector to verify (e.g., "#product-title")
+    - `expected` (string): Expected text or value to find in the element
+    - `attribute` (string, optional): Attribute to check instead of text content (e.g., "href", "data-id")
+    - `details` (object, optional): Details object from browser_inspect_element
+    - `batch` (array, optional): Additional selectors to verify in batch
+  - Features:
+    - Semantic matching for text content
+    - Special handling for semantic labels (name, title, label, heading)
+    - Detailed confidence scoring and explanations
+    - Supports batch verification
+- **Read-only:** true
+
+#### ✨ browser_download_page
+
+- **Purpose:**
+  - Download the current page HTML or a specific URL and save it to a local file.
+- **Usage:**
+  - Provide `url` to navigate and save that page, or omit it to save the active tab (from a prior `browser_navigate`).
+  - Provide `filename` to control the saved name/path; if no extension is provided, `.html` is added. `.html` and `.htm` are equivalent; `.html` is preferred.
+- **Parameters:**
+  - `url` (string, optional): The URL to download. If omitted, uses the currently active tab.
+  - `filename` (string, optional): File name to save the HTML to. Defaults to `page-{timestamp}.html`.
+- **Read-only:** true
+
+#### ✨ browser_inspect_element
+
+- **Purpose:**
+  - Allows you to reveal the selector and DOM tree details of an internal reference in the browser.
+  - Supports inspecting a single element or multiple elements in batch.
+- **Usage:**
+  - Use this tool to programmatically inspect elements, retrieve their selectors, and understand their DOM structure for automation or debugging purposes.
+  - Parameters:
+    - `element` (string): Human-readable element description for permission.
+    - `ref` (string): Exact target element reference from the page snapshot.
+    - `batch` (array, optional): Additional elements to inspect in batch.
+- **Read-only:** true
+
+#### ✨ parser_tester
+
+- **Purpose:**
+  - Test DataHen parsers using the Ruby parser_tester.rb script with HTML files or URLs
+  - Enforces the mandatory workflow outlined in GEMINI.md guidelines
+  - Provides comprehensive error handling and guidance for web scraping development
+- **Usage:**
+  - **MANDATORY**: Always test with HTML files first before using live URLs
+  - Use this tool to validate parser logic, selector accuracy, and data extraction
+  - Parameters:
+    - `scraper_dir` (string, required): Path to scraper directory containing config.yaml
+    - `parser_path` (string, required): Path to parser file relative to scraper directory
+    - `html_file` (string, optional): Path to local HTML file for testing (recommended)
+    - `url` (string, optional): URL to test (only after successful HTML file testing)
+    - `vars` (string, optional): JSON string of variables to preload
+    - `page_type` (string, optional): Page type (details, listings, category, etc.)
+    - `priority` (number, optional): Page priority (default: 500)
+    - `job_id` (number, optional): Job ID (default: 12345)
+    - `quiet` (boolean, optional): Suppress verbose output (default: true)
+- **Features:**
+  - Comprehensive file validation (scraper directory, config.yaml, parser files, HTML files)
+  - Intelligent error analysis and troubleshooting guidance
+  - Integration with browser tools for HTML download workflow
+  - Support for variable passing and context management
+- **Read-only:** true
+
+---
+
+### Tools
+
+<!--- Tools generated by update-readme.js -->
+
+<details>
+<summary><b>Core automation</b></summary>
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_click**
+  - Title: Click
+  - Description: Perform click on a web page
+  - Parameters:
+    - `element` (string): Human-readable element description used to obtain permission to interact with the element
+    - `ref` (string): Exact target element reference from the page snapshot
+    - `doubleClick` (boolean, optional): Whether to perform a double click instead of a single click
+    - `button` (string, optional): Button to click, defaults to left
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_close**
+  - Title: Close browser
+  - Description: Close the page
+  - Parameters: None
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_console_messages**
+  - Title: Get console messages
+  - Description: Returns all console messages
+  - Parameters: None
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_drag**
+  - Title: Drag mouse
+  - Description: Perform drag and drop between two elements
+  - Parameters:
+    - `startElement` (string): Human-readable source element description used to obtain the permission to interact with the element
+    - `startRef` (string): Exact source element reference from the page snapshot
+    - `endElement` (string): Human-readable target element description used to obtain the permission to interact with the element
+    - `endRef` (string): Exact target element reference from the page snapshot
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_evaluate**
+  - Title: Evaluate JavaScript
+  - Description: Evaluate JavaScript expression on page or element
+  - Parameters:
+    - `function` (string): () => { /* code */ } or (element) => { /* code */ } when element is provided
+    - `element` (string, optional): Human-readable element description used to obtain permission to interact with the element
+    - `ref` (string, optional): Exact target element reference from the page snapshot
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_file_upload**
+  - Title: Upload files
+  - Description: Upload one or multiple files
+  - Parameters:
+    - `paths` (array): The absolute paths to the files to upload. Can be a single file or multiple files.
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_handle_dialog**
+  - Title: Handle a dialog
+  - Description: Handle a dialog
+  - Parameters:
+    - `accept` (boolean): Whether to accept the dialog.
+    - `promptText` (string, optional): The text of the prompt in case of a prompt dialog.
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_hover**
+  - Title: Hover mouse
+  - Description: Hover over element on page
+  - Parameters:
+    - `element` (string): Human-readable element description used to obtain permission to interact with the element
+    - `ref` (string): Exact target element reference from the page snapshot
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_navigate**
+  - Title: Navigate to a URL
+  - Description: Navigate to a URL
+  - Parameters:
+    - `url` (string): The URL to navigate to
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_navigate_back**
+  - Title: Go back
+  - Description: Go back to the previous page
+  - Parameters: None
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_navigate_forward**
+  - Title: Go forward
+  - Description: Go forward to the next page
+  - Parameters: None
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_network_requests**
+  - Title: List network requests
+  - Description: Returns all network requests since loading the page
+  - Parameters: None
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_press_key**
+  - Title: Press a key
+  - Description: Press a key on the keyboard
+  - Parameters:
+    - `key` (string): Name of the key to press or a character to generate, such as `ArrowLeft` or `a`
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_resize**
+  - Title: Resize browser window
+  - Description: Resize the browser window
+  - Parameters:
+    - `width` (number): Width of the browser window
+    - `height` (number): Height of the browser window
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_select_option**
+  - Title: Select option
+  - Description: Select an option in a dropdown
+  - Parameters:
+    - `element` (string): Human-readable element description used to obtain permission to interact with the element
+    - `ref` (string): Exact target element reference from the page snapshot
+    - `values` (array): Array of values to select in the dropdown. This can be a single value or multiple values.
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_snapshot**
+  - Title: Page snapshot
+  - Description: Capture accessibility snapshot of the current page, this is better than screenshot
+  - Parameters: None
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_take_screenshot**
+  - Title: Take a screenshot
+  - Description: Take a screenshot of the current page. You can't perform actions based on the screenshot, use browser_snapshot for actions.
+  - Parameters:
+    - `raw` (boolean, optional): Whether to return without compression (in PNG format). Default is false, which returns a JPEG image.
+    - `filename` (string, optional): File name to save the screenshot to. Defaults to `page-{timestamp}.{png|jpeg}` if not specified.
+    - `element` (string, optional): Human-readable element description used to obtain permission to screenshot the element. If not provided, the screenshot will be taken of viewport. If element is provided, ref must be provided too.
+    - `ref` (string, optional): Exact target element reference from the page snapshot. If not provided, the screenshot will be taken of viewport. If ref is provided, element must be provided too.
+    - `fullPage` (boolean, optional): When true, takes a screenshot of the full scrollable page, instead of the currently visible viewport. Cannot be used with element screenshots.
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_type**
+  - Title: Type text
+  - Description: Type text into editable element
+  - Parameters:
+    - `element` (string): Human-readable element description used to obtain permission to interact with the element
+    - `ref` (string): Exact target element reference from the page snapshot
+    - `text` (string): Text to type into the element
+    - `submit` (boolean, optional): Whether to submit entered text (press Enter after)
+    - `slowly` (boolean, optional): Whether to type one character at a time. Useful for triggering key handlers in the page. By default entire text is filled in at once.
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **✨ browser_verify_selector**
+  - Title: Verify selector
+  - Description: Verify that a selector matches an element and contextually matches the expected content
+  - Parameters:
+    - `element` (string): Human-readable element description (e.g., "Product name")
+    - `selector` (string): Selector to verify (e.g., "#product-title")
+    - `expected` (string): Expected text or value to find in the element
+    - `attribute` (string, optional): Attribute to check instead of text content (e.g., "href", "data-id")
+    - `details` (object, optional): Details object from browser_inspect_element
+    - `batch` (array, optional): Additional selectors to verify in batch
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_wait_for**
+  - Title: Wait for
+  - Description: Wait for text to appear or disappear or a specified time to pass
+  - Parameters:
+    - `time` (number, optional): The time to wait in seconds
+    - `text` (string, optional): The text to wait for
+    - `textGone` (string, optional): The text to wait for to disappear
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **✨ browser_inspect_element**
+  - Title: Inspect element
+  - Description: Reveal the selector and DOM tree details of an internal reference. Can inspect a single element or multiple elements in batch using the batch parameter.
+  - Parameters:
+    - `element` (string): Human-readable element description used to obtain permission to interact with the element
+    - `ref` (string): Exact target element reference from the page snapshot
+    - `batch` (array, optional): Optional array of additional elements to inspect in batch
+  - Read-only: **true**
+
+</details>
+
+<details>
+<summary><b>Tab management</b></summary>
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_tab_close**
+  - Title: Close a tab
+  - Description: Close a tab
+  - Parameters:
+    - `index` (number, optional): The index of the tab to close. Closes current tab if not provided.
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_tab_list**
+  - Title: List tabs
+  - Description: List browser tabs
+  - Parameters: None
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_tab_new**
+  - Title: Open a new tab
+  - Description: Open a new tab
+  - Parameters:
+    - `url` (string, optional): The URL to navigate to in the new tab. If not provided, the new tab will be blank.
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_tab_select**
+  - Title: Select a tab
+  - Description: Select a tab by index
+  - Parameters:
+    - `index` (number): The index of the tab to select
+  - Read-only: **true**
+
+</details>
+
+<details>
+<summary><b>Browser installation</b></summary>
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_install**
+  - Title: Install the browser specified in the config
+  - Description: Install the browser specified in the config. Call this if you get an error about the browser not being installed.
+  - Parameters: None
+  - Read-only: **false**
+
+</details>
+
+<details>
+<summary><b>Coordinate-based (opt-in via --caps=vision)</b></summary>
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_mouse_click_xy**
+  - Title: Click
+  - Description: Click left mouse button at a given position
+  - Parameters:
+    - `element` (string): Human-readable element description used to obtain permission to interact with the element
+    - `x` (number): X coordinate
+    - `y` (number): Y coordinate
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_mouse_drag_xy**
+  - Title: Drag mouse
+  - Description: Drag left mouse button to a given position
+  - Parameters:
+    - `element` (string): Human-readable element description used to obtain permission to interact with the element
+    - `startX` (number): Start X coordinate
+    - `startY` (number): Start Y coordinate
+    - `endX` (number): End X coordinate
+    - `endY` (number): End Y coordinate
+  - Read-only: **false**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_mouse_move_xy**
+  - Title: Move mouse
+  - Description: Move mouse to a given position
+  - Parameters:
+    - `element` (string): Human-readable element description used to obtain permission to interact with the element
+    - `x` (number): X coordinate
+    - `y` (number): Y coordinate
+  - Read-only: **true**
+
+</details>
+
+<details>
+<summary><b>PDF generation (opt-in via --caps=pdf)</b></summary>
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **browser_pdf_save**
+  - Title: Save as PDF
+  - Description: Save page as PDF
+  - Parameters:
+    - `filename` (string, optional): File name to save the pdf to. Defaults to `page-{timestamp}.pdf` if not specified.
+  - Read-only: **true**
+
+</details>
+
+<!--- End of tools generated section -->
