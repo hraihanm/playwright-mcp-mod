@@ -3,6 +3,6 @@ node_modules/
 test-results/
 playwright-report/
 .vscode/mcp.json
-
+scraping/naivas_online/
 .idea
 .DS_Store

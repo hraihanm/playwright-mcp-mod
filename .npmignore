@@ -5,3 +5,6 @@ LICENSE
 !cli.js
 !index.*
 !config.d.ts
+!scraping/parser_tester.rb
+!scraping/GEMINI.md
+!PARSER_TESTER_README.md
