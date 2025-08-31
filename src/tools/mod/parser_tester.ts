@@ -21,6 +21,7 @@ import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import os from 'os';
 
 // Get current directory path for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -110,23 +111,79 @@ function findParserTester(): string | null {
   return null;
 }
 
+// Function to get HTML from active browser tab and save it to a temporary file
+async function getActiveTabHTML(context: any): Promise<string> {
+  try {
+    // Get the active tab and extract HTML content directly (same approach as html.ts)
+    const tab = await context.ensureTab();
+    const html = await tab.page.content();
+    
+    if (html && html.trim().length > 0) {
+      // Create a temporary file to store the HTML content
+      const tempFile = createTempHTMLFile(html);
+      console.log(`Successfully extracted HTML from active tab (${html.length} characters)`);
+      return tempFile;
+    } else {
+      throw new Error('Failed to get HTML content from active tab - content is empty');
+    }
+  } catch (error) {
+    throw new Error(`Failed to get HTML from active tab: ${error}`);
+  }
+}
+
+// Function to create a temporary HTML file
+function createTempHTMLFile(htmlContent: string, url?: string): string {
+  // Create a consistent temp directory for parser testing
+  const tempDir = path.join(os.tmpdir(), 'playwright-mcp-parser-tester');
+  
+  // Ensure the directory exists
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true });
+  }
+  
+  // Create a unique filename based on timestamp and URL (or just timestamp for auto-download)
+  const timestamp = Date.now();
+  const urlHash = url ? Buffer.from(url).toString('base64').replace(/[^a-zA-Z0-9]/g, '').substring(0, 8) : 'auto';
+  const filename = `parser-test-${timestamp}-${urlHash}.html`;
+  const filePath = path.join(tempDir, filename);
+  
+  // Write the HTML content to the file
+  fs.writeFileSync(filePath, htmlContent, 'utf8');
+  
+  console.log(`Created temporary HTML file: ${filePath}`);
+  return filePath;
+}
+
+// Function to cleanup temporary files (optional)
+function cleanupTempFile(filePath: string) {
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      console.log(`Cleaned up temporary file: ${filePath}`);
+    }
+  } catch (error) {
+    console.warn(`Failed to cleanup temporary file ${filePath}:`, error);
+  }
+}
+
 const parserTester = defineTool({
   capability: 'core',
 
   schema: {
     name: 'parser_tester',
     title: 'Test DataHen Parser',
-    description: 'Test a DataHen parser using the Ruby parser_tester.rb script with HTML files or URLs',
+    description: 'Test a DataHen parser using the Ruby parser_tester.rb script. Automatically downloads HTML from active browser tab if no HTML file is provided.',
     inputSchema: z.object({
       scraper_dir: z.string().describe('Absolute path to the scraper directory containing config.yaml (e.g., "D:\\DataHen\\projects\\playwright-mcp-mod\\scraping\\naivas_online")'),
       parser_path: z.string().describe('Path to the parser file relative to scraper directory (e.g., "parsers/details.rb")'),
-      html_file: z.string().optional().describe('Absolute path to local HTML file to use for testing (recommended for initial testing)'),
+      html_file: z.string().optional().describe('Absolute path to local HTML file to use for testing (optional - will use active browser tab if not provided)'),
       url: z.string().optional().describe('URL to test (only use after successful HTML file testing)'),
       vars: z.string().optional().describe('JSON string of variables to preload for testing'),
       page_type: z.string().optional().describe('Page type (details, listings, category, etc.)'),
       priority: z.number().optional().describe('Page priority (default: 500)'),
       job_id: z.number().optional().describe('Job ID (default: 12345)'),
       quiet: z.boolean().optional().describe('Suppress verbose output (recommended for AI contexts)'),
+      auto_download: z.boolean().optional().describe('Automatically download HTML from active browser tab if no HTML file provided (default: true)'),
     }),
     type: 'readOnly',
   },
@@ -141,38 +198,37 @@ const parserTester = defineTool({
       page_type,
       priority,
       job_id,
-      quiet = true
+      quiet = true,
+      auto_download = true
     } = params;
 
     // Validate inputs
-    if (!html_file && !url) {
+    if (!html_file && !url && !auto_download) {
       return {
-        code: [`// Parser tester requires either HTML file or URL`],
+        code: [`// Parser tester requires either HTML file, URL, or auto-download enabled`],
         captureSnapshot: false,
         waitForNetwork: false,
         resultOverride: {
           content: [{
             type: 'text',
-            text: `❌ **ERROR**: Parser tester requires either an HTML file (--html) or URL (-u) parameter.
+            text: `❌ **ERROR**: Parser tester requires either:
+1. An HTML file (--html parameter)
+2. A URL (-u parameter) 
+3. Auto-download enabled (--auto-download true, default)
 
-**MANDATORY WORKFLOW** (as per GEMINI.md):
-1. **ALWAYS** download HTML pages first using browser tools
-2. **ALWAYS** test with downloaded HTML files using --html flag
+**Current Parameters:**
+- HTML file: ${html_file || 'Not provided'}
+- URL: ${url || 'Not provided'}
+- Auto-download: ${auto_download}
 
 **Next Steps:**
-- Use \`browser_navigate(url)\` to visit target pages
-- Use \`browser_download_page(filename)\` to save HTML for testing
-- Save HTML to \`cache/\` directory
-- Test parser with downloaded HTML using this tool with --html parameter
+- Provide an HTML file path, OR
+- Provide a URL, OR
+- Enable auto-download to use active browser tab content
 
-**Example:**
+**Example with auto-download:**
 \`\`\`
-# First download HTML using browser tools
-browser_navigate("https://example.com/categories")
-browser_download_page("category-page.html")
-
-# Then test parser with downloaded HTML
-parser_tester --scraper "D:\\DataHen\\projects\\playwright-mcp-mod\\scraping\\naivas_online" --parser "parsers/category.rb" --html "C:\\Users\\username\\Downloads\\category-page.html"
+parser_tester --scraper "D:\\DataHen\\projects\\playwright-mcp-mod\\scraping\\naivas_online" --parser "parsers/details.rb" --auto-download true
 \`\`\``
           }]
         }
@@ -279,17 +335,109 @@ ${resolvedScraperDir}/
 
 **Example:**
 \`\`\`
-parser_tester --scraper "D:\\DataHen\\projects\\playwright-mcp-mod\\scraping\\naivas_online" --parser "parsers/details.rb" --html "C:\\Users\\username\\Downloads\\product.html"
+parser_tester --scraper "D:\\DataHen\\projects\\playwright-mcp-mod\\scraping\\naivas_online" --parser "parsers/details.rb" --auto-download true
 \`\`\``
           }]
         }
       };
     }
 
-    // Resolve HTML file path if specified
+    // Resolve HTML file path - either provided or auto-downloaded
     let resolvedHtmlFile = html_file;
-    if (html_file) {
-      resolvedHtmlFile = path.isAbsolute(html_file) ? html_file : path.resolve(process.cwd(), html_file);
+    let tempHtmlFile: string | null = null;
+    
+         if (!html_file && auto_download) {
+       try {
+         // Auto-download HTML from active browser tab
+         console.log('Auto-downloading HTML from active browser tab...');
+         const tempHtmlPath = await getActiveTabHTML(context);
+         
+         if (!tempHtmlPath) {
+           return {
+             code: [`// Parser tester - failed to get HTML from active tab`],
+             captureSnapshot: false,
+             waitForNetwork: false,
+             resultOverride: {
+               content: [{
+                 type: 'text',
+                 text: `❌ **ERROR**: Failed to get HTML content from active browser tab.
+
+**Possible Causes:**
+- No active browser tab
+- Browser not navigated to a page yet
+- Page not fully loaded
+- JavaScript execution failed
+
+**Next Steps:**
+1. **Navigate to a page first** using \`browser_navigate(url)\`
+2. **Wait for page to load** using \`browser_wait_for\` if needed
+3. **Ensure browser is active** and page is accessible
+4. **Try again** with the parser tester
+
+**Workflow:**
+\`\`\`
+# 1. Navigate to target page
+browser_navigate("https://example.com/categories")
+
+# 2. Wait for page to load (if needed)
+browser_wait_for("text:Category Title")
+
+# 3. Test parser with auto-download
+parser_tester --scraper "D:\\DataHen\\projects\\playwright-mcp-mod\\scraping\\naivas_online" --parser "parsers/category.rb" --auto-download true
+\`\`\`
+
+**Alternative:** Provide an HTML file directly using \`--html\` parameter if auto-download continues to fail.`
+               }]
+             }
+           };
+         }
+         
+         // Use the temporary HTML file path returned by getActiveTabHTML
+         tempHtmlFile = tempHtmlPath;
+         resolvedHtmlFile = tempHtmlPath;
+         
+         console.log(`Successfully created temporary HTML file: ${tempHtmlPath}`);
+         
+       } catch (error: any) {
+        return {
+          code: [`// Parser tester - auto-download failed`],
+          captureSnapshot: false,
+          waitForNetwork: false,
+          resultOverride: {
+            content: [{
+              type: 'text',
+              text: `❌ **ERROR**: Auto-download failed: ${error.message}
+
+**Possible Causes:**
+- No active browser tab
+- Browser not accessible
+- MCP connection issues
+- JavaScript execution failed
+
+**Next Steps:**
+1. **Verify browser is active** and has a loaded page
+2. **Navigate to a page** using \`browser_navigate(url)\` if needed
+3. **Check MCP connection** and browser state
+4. **Use manual HTML file** with \`--html\` parameter as fallback
+
+**Debug Information:**
+- Error: ${error.message}
+- Auto-download enabled: ${auto_download}
+- HTML file provided: ${html_file || 'No'}
+
+**Fallback Options:**
+1. **Manual HTML download**: Use \`browser_download_page(filename)\` first
+2. **Provide HTML file**: Use \`--html\` parameter with existing file
+3. **Check browser state**: Ensure page is loaded and accessible`
+            }]
+          }
+        };
+      }
+    }
+    
+    // If we still don't have an HTML file, check if the provided one exists
+    if (resolvedHtmlFile && !tempHtmlFile) {
+      resolvedHtmlFile = path.isAbsolute(resolvedHtmlFile) ? resolvedHtmlFile : path.resolve(process.cwd(), resolvedHtmlFile);
       
       // Check if HTML file exists
       if (!fs.existsSync(resolvedHtmlFile)) {
@@ -314,7 +462,7 @@ parser_tester --scraper "D:\\DataHen\\projects\\playwright-mcp-mod\\scraping\\na
 - Original HTML file path: \`${html_file}\`
 - Resolved HTML file path: \`${resolvedHtmlFile}\`
 - Current working directory: \`${process.cwd()}\`
-- Path exists: \`${fs.existsSync(html_file)}\`
+- Path exists: \`${fs.existsSync(html_file || '')}\`
 - Resolved path exists: \`${fs.existsSync(resolvedHtmlFile)}\`
 
 **Recommended Workflow:**
@@ -325,6 +473,13 @@ browser_download_page("category-page.html")
 
 # 2. Test parser with downloaded HTML
 parser_tester --scraper "D:\\DataHen\\projects\\playwright-mcp-mod\\scraping\\naivas_online" --parser "parsers/category.rb" --html "C:\\Users\\username\\Downloads\\category-page.html"
+\`\`\`
+
+**Or use auto-download:**
+\`\`\`
+# Navigate to page and test parser directly
+browser_navigate("https://example.com/categories")
+parser_tester --scraper "D:\\DataHen\\projects\\playwright-mcp-mod\\scraping\\naivas_online" --parser "parsers/category.rb" --auto-download true
 \`\`\``
             }]
           }
@@ -418,6 +573,7 @@ If you have access to the source repository, you can:
         console.log('Resolved scraper dir:', resolvedScraperDir);
         console.log('Original HTML file:', html_file);
         console.log('Resolved HTML file:', resolvedHtmlFile);
+        console.log('Auto-downloaded:', tempHtmlFile ? 'Yes' : 'No');
 
         const child = spawn('ruby', args, {
           cwd: process.cwd(),
@@ -457,6 +613,11 @@ If you have access to the source repository, you can:
 
       const { stdout, stderr, exitCode } = result;
 
+      // Clean up temporary file if we created one
+      if (tempHtmlFile) {
+        cleanupTempFile(tempHtmlFile);
+      }
+
       // Parse the output to provide helpful guidance
       let resultText = `✅ **Parser Test Completed Successfully**
 
@@ -466,6 +627,8 @@ ${command}
 \`\`\`
 
 **Exit Code:** ${exitCode}
+
+**HTML Source:** ${tempHtmlFile ? 'Auto-downloaded from active browser tab' : html_file ? 'Provided HTML file' : 'URL'}
 
 **Output:**
 \`\`\`
@@ -489,6 +652,8 @@ ${command}
 \`\`\`
 
 **Exit Code:** ${exitCode}
+
+**HTML Source:** ${tempHtmlFile ? 'Auto-downloaded from active browser tab' : html_file ? 'Provided HTML file' : 'URL'}
 
 **Ruby Error Output:**
 \`\`\`
@@ -516,7 +681,8 @@ ${stdout.trim() || 'No output captured'}
 - Working directory: \`${process.cwd()}\`
 - Original scraper directory: \`${scraper_dir}\`
 - Resolved scraper directory: \`${resolvedScraperDir}\`
-- Parser path: \`${parser_path}\``;
+- Parser path: \`${parser_path}\`
+- HTML source: ${tempHtmlFile ? 'Auto-downloaded' : html_file ? 'Provided file' : 'URL'}`;
         
         return {
           code: [`// Parser tester failed with exit code ${exitCode}: ${command}`],
@@ -568,12 +734,19 @@ ${stdout.trim() || 'No output captured'}
       };
 
     } catch (error: any) {
+      // Clean up temporary file if we created one
+      if (tempHtmlFile) {
+        cleanupTempFile(tempHtmlFile);
+      }
+
       let errorMessage = `❌ **Parser Test Failed**
 
 **Command Attempted:**
 \`\`\`bash
 ${command}
 \`\`\`
+
+**HTML Source:** ${tempHtmlFile ? 'Auto-downloaded from active browser tab' : html_file ? 'Provided HTML file' : 'URL'}
 
 **Error:**
 \`\`\`
@@ -599,7 +772,7 @@ ${error.message}
 
 **Possible Causes:**
 - Network request hanging
-
+- Parser logic issues
 
 **Next Steps:**
 1. Check parser logic for infinite loops
@@ -623,11 +796,20 @@ ${error.message}
       }
 
       errorMessage += `\n\n**Troubleshooting Tips:**
-1. **Always test with HTML files**, do not using live URLs
-2. **Use browser tools** to verify HTML structure and selectors
+1. **Use auto-download** (default) to get HTML from active browser tab
+2. **Navigate to page first** using \`browser_navigate(url)\`
 3. **Check parser syntax** with Ruby interpreter
 4. **Verify file paths** are correct relative to current directory
-5. **Ensure scraper directory** contains valid DataHen configuration`;
+5. **Ensure scraper directory** contains valid DataHen configuration
+
+**Auto-Download Workflow:**
+\`\`\`
+# 1. Navigate to target page
+browser_navigate("https://example.com/categories")
+
+# 2. Test parser directly (auto-downloads HTML)
+parser_tester --scraper "D:\\DataHen\\projects\\playwright-mcp-mod\\scraping\\naivas_online" --parser "parsers/category.rb" --auto-download true
+\`\`\``;
 
       return {
         code: [`// Parser tester failed: ${command}`],
