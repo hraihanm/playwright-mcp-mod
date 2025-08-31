@@ -82,6 +82,32 @@ An attempt to extend/modify MCP tools for personal purpose
     - `batch` (array, optional): Additional elements to inspect in batch.
 - **Read-only:** true
 
+#### ✨ parser_tester
+
+- **Purpose:**
+  - Test DataHen parsers using the Ruby parser_tester.rb script with HTML files or URLs
+  - Enforces the mandatory workflow outlined in GEMINI.md guidelines
+  - Provides comprehensive error handling and guidance for web scraping development
+- **Usage:**
+  - **MANDATORY**: Always test with HTML files first before using live URLs
+  - Use this tool to validate parser logic, selector accuracy, and data extraction
+  - Parameters:
+    - `scraper_dir` (string, required): Path to scraper directory containing config.yaml
+    - `parser_path` (string, required): Path to parser file relative to scraper directory
+    - `html_file` (string, optional): Path to local HTML file for testing (recommended)
+    - `url` (string, optional): URL to test (only after successful HTML file testing)
+    - `vars` (string, optional): JSON string of variables to preload
+    - `page_type` (string, optional): Page type (details, listings, category, etc.)
+    - `priority` (number, optional): Page priority (default: 500)
+    - `job_id` (number, optional): Job ID (default: 12345)
+    - `quiet` (boolean, optional): Suppress verbose output (default: true)
+- **Features:**
+  - Comprehensive file validation (scraper directory, config.yaml, parser files, HTML files)
+  - Intelligent error analysis and troubleshooting guidance
+  - Integration with browser tools for HTML download workflow
+  - Support for variable passing and context management
+- **Read-only:** true
+
 ---
 
 ### Tools

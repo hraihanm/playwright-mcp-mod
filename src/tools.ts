@@ -31,6 +31,7 @@ import wait from './tools/wait.js';
 import mouse from './tools/mouse.js';
 import inspector from './tools/inspector.js';
 import html from './tools/html.js';
+import parserTester from './tools/parser_tester.js';
 
 import type { Tool } from './tools/tool.js';
 
@@ -52,4 +53,5 @@ export const allTools: Tool<any>[] = [
   ...wait,
   ...inspector,
   ...html,
+  ...parserTester,
 ];

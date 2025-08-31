@@ -170,7 +170,14 @@ const inspectElement = defineTool({
     ];
 
     // Execute the inspection immediately and construct the final content
-    const results = [] as Array<any>;
+    const results: Array<{
+      element: string;
+      ref: string;
+      resolvedSelector?: string;
+      details?: any;
+      error?: string;
+      success: boolean;
+    }> = [];
     for (const element of elementsToInspect) {
       try {
         const locator = snapshot.refLocator(element);
@@ -336,13 +343,13 @@ const verifySelectorSchema = z.object({
   selector: z.string().describe('Selector to verify (e.g., "#email")'),
   expected: z.string().describe('Expected text or value to find in the element (e.g., "Sign up" for a button)'),
   attribute: z.string().optional().describe('Optional attribute name to check instead of text content (e.g., "href", "data-id", "value")'),
-  details: z.any().optional().describe('Optional details object from browser_inspect_element'),
+  details: z.record(z.unknown()).optional().describe('Optional details object from browser_inspect_element'),
   batch: z.array(z.object({
     element: z.string().describe('Human-readable element description (e.g., "Email input")'),
     selector: z.string().describe('Selector to verify (e.g., "#email")'),
     expected: z.string().describe('Expected text or value to find in the element (e.g., "Sign up" for a button)'),
     attribute: z.string().optional().describe('Optional attribute name to check instead of text content (e.g., "href", "data-id", "value")'),
-    details: z.any().optional().describe('Optional details object from browser_inspect_element'),
+    details: z.record(z.unknown()).optional().describe('Optional details object from browser_inspect_element'),
   })).optional().describe('Optional array of additional selectors to verify in batch'),
 });
 
@@ -392,7 +399,7 @@ function calculateSimilarity(text1: string, text2: string): number {
 }
 
 // Helper function to find best semantic match from properties
-function findBestSemanticMatch(target: string, properties: Record<string, any>): {
+function findBestSemanticMatch(target: string, properties: Record<string, unknown>): {
   similarity: number;
   property: string;
   value: string;
@@ -440,7 +447,13 @@ const verifySelector = defineTool({
       ...(params.batch || [])
     ];
 
-    const results = [];
+    const results: Array<{
+      element: string;
+      selector: string;
+      match: boolean;
+      confidence: number;
+      explanation: string;
+    }> = [];
 
     for (const elementToVerify of elementsToVerify) {
       const { element: description, selector, expected, details } = elementToVerify;
