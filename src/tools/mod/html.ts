@@ -15,8 +15,8 @@
  */
 
 import { z } from 'zod';
-import { defineTool } from './tool.js';
-import { outputFile } from '../config.js';
+import { defineTool } from '../tool.js';
+import { outputFile } from '../../config.js';
 
 import * as fs from 'fs/promises';
 

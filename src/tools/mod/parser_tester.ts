@@ -16,14 +16,10 @@
  */
 
 import { z } from 'zod';
-import { defineTool } from './tool.js';
+import { defineTool } from '../tool.js';
 import { spawn } from 'child_process';
-import { promisify } from 'util';
-import { exec } from 'child_process';
 import path from 'path';
 import fs from 'fs';
-
-const execAsync = promisify(exec);
 
 const parserTester = defineTool({
   capability: 'core',
@@ -216,48 +212,59 @@ parser_tester --scraper "./generated_scraper" --parser "parsers/category.rb" --h
       };
     }
 
-    // Build command arguments
-    const args = [
-      'ruby',
-      'scraping/parser_tester.rb',
-      '-s', scraper_dir,
-      '-p', parser_path
-    ];
-
-    if (html_file) {
-      args.push('--html', html_file);
-    } else if (url) {
-      args.push('-u', url);
-    }
-
-    if (vars) {
-      args.push('-v', vars);
-    }
-
-    if (page_type) {
-      args.push('--page-type', page_type);
-    }
-
-    if (priority) {
-      args.push('--priority', priority.toString());
-    }
-
-    if (job_id) {
-      args.push('--job-id', job_id.toString());
-    }
-
-    if (quiet) {
-      args.push('--quiet');
-    }
-
-    const command = args.join(' ');
+    // Build command string for display purposes
+    const command = `ruby scraping/parser_tester.rb -s ${scraper_dir} -p ${parser_path}${html_file ? ` --html ${html_file}` : ''}${url ? ` -u ${url}` : ''}${vars ? ` -v ${vars}` : ''}${page_type ? ` --page-type ${page_type}` : ''}${priority ? ` --priority ${priority}` : ''}${job_id ? ` --job-id ${job_id}` : ''}${quiet ? ' --quiet' : ''}`;
 
     try {
-      // Execute the parser tester
-      const { stdout, stderr } = await execAsync(command, {
-        cwd: process.cwd(),
-        timeout: 60000 // 60 second timeout
+      // Execute the parser tester using spawn to capture exit code
+      const result = await new Promise<{ stdout: string; stderr: string; exitCode: number }>((resolve, reject) => {
+        const child = spawn('ruby', [
+          'scraping/parser_tester.rb',
+          '-s', scraper_dir,
+          '-p', parser_path,
+          ...(html_file ? ['--html', html_file] : []),
+          ...(url ? ['-u', url] : []),
+          ...(vars ? ['-v', vars] : []),
+          ...(page_type ? ['--page-type', page_type] : []),
+          ...(priority ? ['--priority', priority.toString()] : []),
+          ...(job_id ? ['--job-id', job_id.toString()] : []),
+          ...(quiet ? ['--quiet'] : [])
+        ], {
+          cwd: process.cwd(),
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout?.on('data', (data) => {
+          stdout += data.toString();
+        });
+
+        child.stderr?.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        child.on('close', (code) => {
+          resolve({
+            stdout,
+            stderr,
+            exitCode: code ?? -1
+          });
+        });
+
+        child.on('error', (error) => {
+          reject(error);
+        });
+
+        // Set timeout
+        setTimeout(() => {
+          child.kill();
+          reject(new Error('Execution timeout after 60 seconds'));
+        }, 60000);
       });
+
+      const { stdout, stderr, exitCode } = result;
 
       // Parse the output to provide helpful guidance
       let resultText = `✅ **Parser Test Completed Successfully**
@@ -266,6 +273,8 @@ parser_tester --scraper "./generated_scraper" --parser "parsers/category.rb" --h
 \`\`\`bash
 ${command}
 \`\`\`
+
+**Exit Code:** ${exitCode}
 
 **Output:**
 \`\`\`
@@ -277,6 +286,51 @@ ${stdout.trim()}
 \`\`\`
 ${stderr.trim()}
 \`\`\``;
+      }
+
+      // Check exit code first
+      if (exitCode !== 0) {
+        resultText = `❌ **Parser Test Failed with Exit Code ${exitCode}**
+
+**Command Executed:**
+\`\`\`bash
+${command}
+\`\`\`
+
+**Exit Code:** ${exitCode}
+
+**Ruby Error Output:**
+\`\`\`
+${stderr.trim() || 'No error output captured'}
+\`\`\`
+
+**Standard Output:**
+\`\`\`
+${stdout.trim() || 'No output captured'}
+\`\`\`
+
+**Exit Code ${exitCode} typically indicates:**
+- **1-127**: Ruby execution errors (syntax errors, runtime errors, missing gems)
+- **128+**: System-level errors (file not found, permission denied, etc.)
+
+**Next Steps:**
+1. **Check Ruby syntax**: \`ruby -c ${parser_path}\`
+2. **Verify dependencies**: Ensure all required gems are installed
+3. **Review error output**: Look for specific error messages in stderr
+4. **Check file permissions**: Ensure parser files are readable
+5. **Test with simpler HTML**: Use a minimal HTML file to isolate issues`;
+        
+        return {
+          code: [`// Parser tester failed with exit code ${exitCode}: ${command}`],
+          captureSnapshot: false,
+          waitForNetwork: false,
+          resultOverride: {
+            content: [{
+              type: 'text',
+              text: resultText
+            }]
+          }
+        };
       }
 
       // Analyze output to provide next steps
@@ -351,9 +405,8 @@ ${error.message}
         errorMessage += `\n\n⏰ **Execution Timeout**
 
 **Possible Causes:**
-- Parser is stuck in infinite loop
 - Network request hanging
-- Complex HTML processing taking too long
+
 
 **Next Steps:**
 1. Check parser logic for infinite loops
@@ -365,14 +418,15 @@ ${error.message}
 
 **Possible Causes:**
 - Syntax errors in parser file
-- Missing dependencies
-- Ruby version compatibility issues
+- Runtime errors in parser execution
+- Missing dependencies or gems
 
 **Next Steps:**
 1. Check parser file syntax: \`ruby -c parsers/your_parser.rb\`
 2. Verify all required gems are installed
 3. Check Ruby version compatibility
-4. Review parser code for syntax errors`;
+4. Review parser code for syntax errors
+5. Check the exit code for specific error information`;
       }
 
       errorMessage += `\n\n**Troubleshooting Tips:**

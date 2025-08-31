@@ -29,9 +29,7 @@ import tabs from './tools/tabs.js';
 import screenshot from './tools/screenshot.js';
 import wait from './tools/wait.js';
 import mouse from './tools/mouse.js';
-import inspector from './tools/inspector.js';
-import html from './tools/html.js';
-import parserTester from './tools/parser_tester.js';
+import mod from './tools/mod/index.js';
 
 import type { Tool } from './tools/tool.js';
 
@@ -51,7 +49,5 @@ export const allTools: Tool<any>[] = [
   ...snapshot,
   ...tabs,
   ...wait,
-  ...inspector,
-  ...html,
-  ...parserTester,
+  ...mod,
 ];

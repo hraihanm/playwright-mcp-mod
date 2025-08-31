@@ -19,8 +19,8 @@ import { z } from 'zod';
 import natural from 'natural';
 // @ts-ignore
 import sanitize from 'html-sanitize';
-import { defineTool } from './tool.js';
-import { generateLocator } from './utils.js';
+import { defineTool } from '../tool.js';
+import { generateLocator } from '../utils.js';
 
 // HTML sanitization configuration for the inspector tool
 const sanitizeConfig = {
