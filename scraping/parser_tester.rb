@@ -38,7 +38,7 @@ class ParserTester
     mock_page_variable(url, vars, options)
     
     begin
-      execute_parser(parser_path)
+      execute_parser(parser_path, scraper_dir)
       display_results
     rescue => e
       puts "\n✗ Parser execution failed!"
@@ -235,15 +235,33 @@ class ParserTester
     Digest::MD5.hexdigest(url)[0..31]
   end
 
-  def execute_parser(parser_path)
+  def execute_parser(parser_path, scraper_dir = nil)
     begin
       original_dir = Dir.pwd
-      scraper_dir = File.dirname(File.dirname(parser_path))
+      
+      # Determine scraper directory and parser filename based on path type
+      if File.absolute_path?(parser_path)
+        # For absolute paths, use the provided scraper_dir or find it from parser path
+        if scraper_dir
+          scraper_dir = File.expand_path(scraper_dir)
+        else
+          scraper_dir = File.dirname(File.dirname(parser_path))
+        end
+        parser_filename = File.expand_path(parser_path)
+      else
+        # For relative paths, use the original logic
+        scraper_dir = File.dirname(File.dirname(parser_path))
+        parser_filename = "parsers/#{File.basename(parser_path)}"
+      end
+      
       Dir.chdir(scraper_dir)
 
       load_lib_files(scraper_dir)
 
-      parser_filename = "parsers/#{File.basename(parser_path)}"
+      unless File.exist?(parser_filename)
+        raise "Parser file not found: #{parser_filename}"
+      end
+      
       parser_code = File.read(parser_filename)
 
       binding_obj = create_parser_binding
@@ -474,10 +492,16 @@ def main
     exit 1
   end
   
-  full_parser_path = File.join(options[:scraper], options[:parser])
-  unless File.exist?(full_parser_path)
-    puts "Error: Parser file not found: #{full_parser_path}"
-    exit 1
+  # Check if parser path is absolute or relative
+  if File.absolute_path?(options[:parser])
+    full_parser_path = File.expand_path(options[:parser])
+    # For absolute paths, don't check existence here - let execute_parser handle it
+  else
+    full_parser_path = File.join(options[:scraper], options[:parser])
+    unless File.exist?(full_parser_path)
+      puts "Error: Parser file not found: #{full_parser_path}"
+      exit 1
+    end
   end
   
   vars = {}
