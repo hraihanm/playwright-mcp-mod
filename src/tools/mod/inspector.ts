@@ -39,7 +39,7 @@ const sanitizeConfig = {
   // Allow all attributes for all tags
   allowedAttributes: '*',
   // Remove only SVG elements and their attributes
-  removeTags: ['svg', 'path', 'circle', 'rect', 'polygon', 'line', 'g', 'defs', 'clipPath', 'mask', 'filter', 'feGaussianBlur', 'feOffset', 'feMerge', 'feMergeNode', 'feComposite', 'feBlend', 'feColorMatrix', 'feComponentTransfer', 'feFuncR', 'feFuncG', 'feFuncB', 'feFuncA', 'feConvolveMatrix', 'feDiffuseLighting', 'feSpecularLighting', 'feDistantLight', 'fePointLight', 'feSpotLight', 'feTile', 'feTurbulence', 'feMorphology', 'feImage', 'feDisplacementMap', 'feFlood', 'feDropShadow'],
+  removeTags: ['style', 'script', 'svg', 'path', 'circle', 'rect', 'polygon', 'line', 'g', 'defs', 'clipPath', 'mask', 'filter', 'feGaussianBlur', 'feOffset', 'feMerge', 'feMergeNode', 'feComposite', 'feBlend', 'feColorMatrix', 'feComponentTransfer', 'feFuncR', 'feFuncG', 'feFuncB', 'feFuncA', 'feConvolveMatrix', 'feDiffuseLighting', 'feSpecularLighting', 'feDistantLight', 'fePointLight', 'feSpotLight', 'feTile', 'feTurbulence', 'feMorphology', 'feImage', 'feDisplacementMap', 'feFlood', 'feDropShadow'],
   // Don't remove any attributes
   removeAttributes: [],
   // Maximum length limits for HTML content
@@ -242,7 +242,7 @@ const inspectElement = defineTool({
                     `## Attributes:\n${JSON.stringify(result.details.attributes, null, 2)}\n\n` +
                     `## Outer HTML:\n\`\`\`html\n${result.details.outerHTML}\n\`\`\`\n\n` +
                     `## Inner HTML:\n\`\`\`html\n${result.details.innerHTML}\n\`\`\`\n\n` +
-                    `> **Note:** HTML content has been sanitized for security. SVG elements, scripts, styles, and potentially sensitive attributes have been removed.`;
+                    `> **Note:** HTML content has been sanitized. SVG elements, scripts, styles, etc have been removed.`;
       } else {
         outputText = `Error inspecting element "${result.element}" with reference "${result.ref}": ${result.error}`;
       }

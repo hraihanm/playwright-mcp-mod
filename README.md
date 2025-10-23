@@ -33,7 +33,11 @@ An attempt to extend/modify MCP tools for personal purpose
 
 ---
 
-### 🆕 Added Tools
+### 🆕 Added Tools & Recent Updates
+
+**Key Updates:**
+- ✨ **NEW**: `browser_view_html` - Get page HTML with configurable script inclusion and sanitization
+- ⚠️ **MODIFIED**: `browser_download_page` - Disabled in favor of `browser_view_html` for better token management
 
 #### ✨ browser_verify_selector
 
@@ -57,17 +61,29 @@ An attempt to extend/modify MCP tools for personal purpose
     - Supports batch verification
 - **Read-only:** true
 
-#### ✨ browser_download_page
+#### ✨ browser_view_html
 
 - **Purpose:**
-  - Download the current page HTML or a specific URL and save it to a local file.
+  - Get the HTML content of the current page with configurable options for scripts and sanitization.
+  - Provides the full HTML content directly to the agent without saving to files.
 - **Usage:**
-  - Provide `url` to navigate and save that page, or omit it to save the active tab (from a prior `browser_navigate`).
-  - Provide `filename` to control the saved name/path; if no extension is provided, `.html` is added. `.html` and `.htm` are equivalent; `.html` is preferred.
+  - Use this tool to retrieve page HTML content for analysis, parsing, or debugging.
+  - Configure `includeScripts` and `isSanitized` parameters to control content and token usage.
 - **Parameters:**
-  - `url` (string, optional): The URL to download. If omitted, uses the currently active tab.
-  - `filename` (string, optional): File name to save the HTML to. Defaults to `page-{timestamp}.html`.
+  - `includeScripts` (boolean, optional, default: false): Whether to include script tags in the HTML output. Defaults to false to reduce token usage.
+  - `isSanitized` (boolean, optional, default: true): Whether to sanitize the HTML content. Defaults to true to reduce token usage and remove potentially sensitive content.
+- **Features:**
+  - **Configurable script inclusion/exclusion** - Control whether to include JavaScript code
+  - **Advanced HTML sanitization** - Mainly removes `svg` and `scripts` elements.
+  - **Token usage optimization** - Smart defaults to minimize token consumption
+  - **Direct HTML content return** - No file saving required, content returned directly to agent
 - **Read-only:** true
+
+#### ⚠️ browser_download_page (DISABLED)
+
+- **Status:** Currently disabled - use `browser_view_html` instead
+- **Purpose:** (Previously) Download the current page HTML or a specific URL and save it to a local file.
+- **Note:** This tool has been disabled to encourage the use of `browser_view_html` which provides better token management and more flexible HTML content access.
 
 #### ✨ browser_inspect_element
 
@@ -317,6 +333,16 @@ An attempt to extend/modify MCP tools for personal purpose
     - `time` (number, optional): The time to wait in seconds
     - `text` (string, optional): The text to wait for
     - `textGone` (string, optional): The text to wait for to disappear
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **✨ browser_view_html**
+  - Title: View page HTML
+  - Description: Get the HTML content of the current page with options for including scripts and sanitization.
+  - Parameters:
+    - `includeScripts` (boolean, optional): Whether to include script tags in the HTML output. Defaults to false to reduce token usage.
+    - `isSanitized` (boolean, optional): Whether to sanitize the HTML content. Defaults to true to reduce token usage and remove potentially sensitive content.
   - Read-only: **true**
 
 <!-- NOTE: This has been generated via update-readme.js -->
