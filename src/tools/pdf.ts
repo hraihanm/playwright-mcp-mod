@@ -49,6 +49,9 @@ const pdf = defineTool({
       action: async () => tab.page.pdf({ path: fileName }).then(() => {}),
       captureSnapshot: false,
       waitForNetwork: false,
+      resultOverride: {
+        content: [{ type: 'text', text: `Saved page as PDF: ${fileName}` }]
+      },
     };
   },
 });

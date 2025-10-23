@@ -51,6 +51,9 @@ const handleDialog = defineTool({
       code,
       captureSnapshot: true,
       waitForNetwork: false,
+      resultOverride: {
+        content: [{ type: 'text', text: `Handled ${dialogState.dialog.type()} dialog (${params.accept ? 'accepted' : 'dismissed'})` }]
+      },
     };
   },
 

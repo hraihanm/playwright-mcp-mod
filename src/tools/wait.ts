@@ -61,6 +61,9 @@ const wait = defineTool({
       code,
       captureSnapshot: true,
       waitForNetwork: false,
+      resultOverride: {
+        content: [{ type: 'text', text: `Wait completed${params.time ? ` (${params.time}s)` : ''}${params.text ? ` for text: "${params.text}"` : ''}${params.textGone ? ` for text to disappear: "${params.textGone}"` : ''}` }]
+      },
     };
   },
 });

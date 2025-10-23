@@ -94,6 +94,9 @@ const screenshot = defineTool({
       action,
       captureSnapshot: false,
       waitForNetwork: false,
+      resultOverride: {
+        content: [{ type: 'text', text: `Screenshot saved: ${fileName} (${screenshotTarget})` }]
+      },
     };
   }
 });

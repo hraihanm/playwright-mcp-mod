@@ -66,7 +66,10 @@ const selectTab = defineTool({
     return {
       code,
       captureSnapshot: true,
-      waitForNetwork: false
+      waitForNetwork: false,
+      resultOverride: {
+        content: [{ type: 'text', text: `Selected tab ${params.index}` }]
+      },
     };
   },
 });
@@ -95,7 +98,10 @@ const newTab = defineTool({
     return {
       code,
       captureSnapshot: true,
-      waitForNetwork: false
+      waitForNetwork: false,
+      resultOverride: {
+        content: [{ type: 'text', text: `Opened new tab${params.url ? ` and navigated to ${params.url}` : ''}` }]
+      },
     };
   },
 });
@@ -121,7 +127,10 @@ const closeTab = defineTool({
     return {
       code,
       captureSnapshot: true,
-      waitForNetwork: false
+      waitForNetwork: false,
+      resultOverride: {
+        content: [{ type: 'text', text: `Closed tab ${params.index}` }]
+      },
     };
   },
 });

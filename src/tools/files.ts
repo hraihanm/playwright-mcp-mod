@@ -49,6 +49,9 @@ const uploadFile = defineTool({
       action,
       captureSnapshot: true,
       waitForNetwork: true,
+      resultOverride: {
+        content: [{ type: 'text', text: `Uploaded files: ${params.paths.join(', ')}` }]
+      },
     };
   },
   clearsModalState: 'fileChooser',

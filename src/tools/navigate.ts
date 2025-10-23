@@ -43,6 +43,9 @@ const navigate = defineTool({
       code,
       captureSnapshot: true,
       waitForNetwork: false,
+      resultOverride: {
+        content: [{ type: 'text', text: `Navigated to ${params.url}` }]
+      },
     };
   },
 });
@@ -69,6 +72,9 @@ const goBack = defineTool({
       code,
       captureSnapshot: true,
       waitForNetwork: false,
+      resultOverride: {
+        content: [{ type: 'text', text: 'Navigated back to previous page' }]
+      },
     };
   },
 });
@@ -93,6 +99,9 @@ const goForward = defineTool({
       code,
       captureSnapshot: true,
       waitForNetwork: false,
+      resultOverride: {
+        content: [{ type: 'text', text: 'Navigated forward to next page' }]
+      },
     };
   },
 });

@@ -42,6 +42,9 @@ const requests = defineTool({
       },
       captureSnapshot: false,
       waitForNetwork: false,
+      resultOverride: {
+        content: [{ type: 'text', text: log }]
+      },
     };
   },
 });
