@@ -169,41 +169,38 @@ const viewHtml = defineTool({
       `// HTML content retrieved${params.isSanitized ? ' (sanitized)' : ''}${params.includeScripts ? ' (including scripts)' : ' (scripts excluded)'}`,
     ];
 
-    const action = async () => {
-      let html = await tab.page.content();
+    // Execute the action immediately to get HTML content
+    let html = await tab.page.content();
+    
+    // Remove scripts if not requested
+    if (!params.includeScripts) {
+      html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    }
+    
+    // Sanitize if requested using defaults from SANITIZATION_CONFIG
+    if (params.isSanitized) {
+      const sanitizeOptions: SanitizeConfig = {
+        removeStyleTags: SANITIZATION_CONFIG.defaults.removeStyleTags,
+        removeSvgElements: SANITIZATION_CONFIG.defaults.removeSvgElements,
+        limitUrlAttributes: SANITIZATION_CONFIG.defaults.limitUrlAttributes,
+        maxAttributeValueLength: SANITIZATION_CONFIG.defaults.maxAttributeValueLength
+      };
       
-      // Remove scripts if not requested
-      if (!params.includeScripts) {
-        html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-      }
-      
-      // Sanitize if requested using defaults from SANITIZATION_CONFIG
-      if (params.isSanitized) {
-        const sanitizeOptions: SanitizeConfig = {
-          removeStyleTags: SANITIZATION_CONFIG.defaults.removeStyleTags,
-          removeSvgElements: SANITIZATION_CONFIG.defaults.removeSvgElements,
-          limitUrlAttributes: SANITIZATION_CONFIG.defaults.limitUrlAttributes,
-          maxAttributeValueLength: SANITIZATION_CONFIG.defaults.maxAttributeValueLength
-        };
-        
-        html = sanitizeHTML(html, sanitizeOptions);
-      }
-      
-      return {
+      html = sanitizeHTML(html, sanitizeOptions);
+    }
+
+    return {
+      code,
+      captureSnapshot: false,
+      waitForNetwork: false,
+      resultOverride: {
         content: [
           {
             type: 'text' as const,
             text: html
           }
         ]
-      };
-    };
-
-    return {
-      code,
-      action,
-      captureSnapshot: false,
-      waitForNetwork: false,
+      },
     };
   },
 });

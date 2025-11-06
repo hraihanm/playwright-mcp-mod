@@ -603,15 +603,17 @@ const verifySelector = defineTool({
 
     return {
       code: [`\`${finalExplanation.replace(/`/g, '\\`')}\``],
-      content: [
-        { 
-          type: 'text', 
-          text: finalExplanation
-        }
-      ],
-      results,
       captureSnapshot: false,
       waitForNetwork: false,
+      resultOverride: {
+        content: [
+          { 
+            type: 'text', 
+            text: finalExplanation
+          }
+        ],
+      },
+      results,
     };
   },
 });
