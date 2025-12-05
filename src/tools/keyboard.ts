@@ -49,9 +49,6 @@ const pressKey = defineTool({
       action,
       captureSnapshot: true,
       waitForNetwork: true,
-      resultOverride: {
-        content: [{ type: 'text', text: `Pressed key: ${params.key}` }]
-      },
     };
   },
 });
@@ -100,9 +97,6 @@ const type = defineTool({
       action: () => steps.reduce((acc, step) => acc.then(step), Promise.resolve()),
       captureSnapshot: true,
       waitForNetwork: true,
-      resultOverride: {
-        content: [{ type: 'text', text: `Typed "${params.text}" into ${params.element}${params.submit ? ' and submitted' : ''}` }]
-      },
     };
   },
 });

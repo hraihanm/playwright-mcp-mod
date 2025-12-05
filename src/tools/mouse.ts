@@ -46,9 +46,6 @@ const mouseMove = defineTool({
       action,
       captureSnapshot: false,
       waitForNetwork: false,
-      resultOverride: {
-        content: [{ type: 'text', text: `Moved mouse to coordinates (${params.x}, ${params.y})` }]
-      },
     };
   },
 });
@@ -84,9 +81,6 @@ const mouseClick = defineTool({
       action,
       captureSnapshot: false,
       waitForNetwork: true,
-      resultOverride: {
-        content: [{ type: 'text', text: `Clicked mouse at coordinates (${params.x}, ${params.y})` }]
-      },
     };
   },
 });
@@ -129,9 +123,6 @@ const mouseDrag = defineTool({
       action,
       captureSnapshot: false,
       waitForNetwork: true,
-      resultOverride: {
-        content: [{ type: 'text', text: `Dragged mouse from (${params.startX}, ${params.startY}) to (${params.endX}, ${params.endY})` }]
-      },
     };
   },
 });

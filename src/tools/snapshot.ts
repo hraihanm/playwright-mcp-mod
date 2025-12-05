@@ -113,9 +113,6 @@ const click = defineTool({
       action: () => params.doubleClick ? locator.dblclick({ button }) : locator.click({ button }),
       captureSnapshot: true,
       waitForNetwork: true,
-      resultOverride: {
-        content: [{ type: 'text', text: `${params.doubleClick ? 'Double clicked' : 'Clicked'} ${params.element}` }]
-      },
     };
   },
 });
@@ -150,9 +147,6 @@ const drag = defineTool({
       action: () => startLocator.dragTo(endLocator),
       captureSnapshot: true,
       waitForNetwork: true,
-      resultOverride: {
-        content: [{ type: 'text', text: `Dragged ${params.startElement} to ${params.endElement}` }]
-      },
     };
   },
 });
@@ -181,9 +175,6 @@ const hover = defineTool({
       action: () => locator.hover(),
       captureSnapshot: true,
       waitForNetwork: true,
-      resultOverride: {
-        content: [{ type: 'text', text: `Hovered over ${params.element}` }]
-      },
     };
   },
 });
@@ -216,9 +207,6 @@ const selectOption = defineTool({
       action: () => locator.selectOption(params.values).then(() => {}),
       captureSnapshot: true,
       waitForNetwork: true,
-      resultOverride: {
-        content: [{ type: 'text', text: `Selected options [${params.values.join(', ')}] in ${params.element}` }]
-      },
     };
   },
 });

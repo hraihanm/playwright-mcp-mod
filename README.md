@@ -33,9 +33,29 @@ An attempt to extend/modify MCP tools for personal purpose
 
 ---
 
+### 🔄 Maintaining Fork with Upstream Updates
+
+This repository is a fork of [Microsoft's Playwright MCP](https://github.com/microsoft/playwright-mcp) with custom modifications. To keep your modifications while syncing upstream updates, see **[MAINTAINING_FORK.md](MAINTAINING_FORK.md)** for detailed instructions.
+
+**Quick Start:**
+```bash
+# One-time setup: Add upstream remote
+.\scripts\setup-upstream.ps1  # Windows PowerShell
+# or
+./scripts/setup-upstream.sh    # Linux/Mac
+
+# Sync with upstream (creates backup automatically)
+.\scripts\sync-upstream.ps1    # Windows PowerShell
+# or
+./scripts/sync-upstream.sh     # Linux/Mac
+```
+
+---
+
 ### 🆕 Added Tools & Recent Updates
 
 **Key Updates:**
+- ✨ **ENHANCED**: `browser_take_screenshot` - Now includes coordinate metadata for vision-based interactions with `_xy` tools
 - ✨ **NEW**: `browser_view_html` - Get page HTML with configurable script inclusion and sanitization
 - ⚠️ **MODIFIED**: `browser_download_page` - Disabled in favor of `browser_view_html` for better token management
 
@@ -97,6 +117,31 @@ An attempt to extend/modify MCP tools for personal purpose
     - `ref` (string): Exact target element reference from the page snapshot.
     - `batch` (array, optional): Additional elements to inspect in batch.
 - **Read-only:** true
+
+#### ✨ browser_take_screenshot (Enhanced)
+
+- **Purpose:**
+  - Take screenshots of the current page with coordinate metadata for vision-based interactions
+  - Enables AI agents to recognize elements visually and interact with them using coordinate-based tools
+  - Supports viewport, full-page, and element-specific screenshots
+- **Usage:**
+  - Use this tool when you need visual recognition of page elements (buttons, forms, etc.)
+  - The screenshot includes coordinate metadata that can be used with `browser_mouse_click_xy`, `browser_mouse_move_xy`, and `browser_mouse_drag_xy`
+  - Workflow: Take screenshot → AI recognizes element coordinates → Call `_xy` tool with coordinates
+- **Parameters:**
+  - `raw` (boolean, optional): Whether to return without compression (PNG format). Default is false (JPEG).
+  - `filename` (string, optional): File name to save the screenshot. Defaults to `page-{timestamp}.{png|jpeg}`
+  - `element` (string, optional): Human-readable element description for element screenshots
+  - `ref` (string, optional): Exact target element reference from page snapshot (required with element)
+  - `fullPage` (boolean, optional): When true, captures full scrollable page instead of viewport
+- **Features:**
+  - **Coordinate metadata** - Includes viewport size, page dimensions, and element bounding boxes
+  - **Coordinate system information** - Explains coordinate system (0,0 is top-left)
+  - **Element position data** - For element screenshots, provides page coordinates and element center
+  - **Tool integration** - Metadata includes instructions for using coordinate-based tools
+  - **Vision-based automation** - Enables AI to visually identify and interact with page elements
+- **Read-only:** true
+- **Requires:** `--caps=vision` for coordinate-based tools (`browser_mouse_click_xy`, etc.)
 
 #### ✨ parser_tester
 
@@ -466,3 +511,30 @@ An attempt to extend/modify MCP tools for personal purpose
 </details>
 
 <!--- End of tools generated section -->
+
+---
+
+## Changelog
+
+### [Unreleased]
+
+#### Enhanced
+- **browser_take_screenshot**: Added coordinate metadata support for vision-based interactions
+  - Screenshots now include viewport dimensions, page dimensions, and element bounding box information
+  - Added coordinate system documentation in screenshot responses
+  - Enables AI agents to visually recognize elements and interact with them using `browser_mouse_click_xy`, `browser_mouse_move_xy`, and `browser_mouse_drag_xy` tools
+  - Updated tool description to clarify coordinate-based interaction capabilities
+
+#### Added
+- **browser_view_html**: Get page HTML with configurable script inclusion and sanitization
+- **browser_verify_selector**: Verify selector matches and contextually matches expected content
+- **browser_inspect_element**: Reveal selector and DOM tree details of internal references
+- **parser_tester**: Test DataHen parsers using Ruby parser_tester.rb script
+
+#### Modified
+- **browser_download_page**: Disabled in favor of `browser_view_html` for better token management
+
+#### Changed
+- Screenshot tool now returns coordinate metadata alongside images
+- Screenshot responses include instructions for using coordinate-based tools
+- Improved documentation for vision-based automation workflows
