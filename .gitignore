@@ -6,3 +6,9 @@ playwright-report/
 scraping/naivas_online/
 .idea
 .DS_Store
+SYNC_STRATEGY_SUMMARY.md
+scripts/setup-upstream.ps1
+scripts/setup-upstream.sh
+scripts/sync-upstream.ps1
+scripts/sync-upstream.sh
+MAINTAINING_FORK.md

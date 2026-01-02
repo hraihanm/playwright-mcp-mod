@@ -28,6 +28,7 @@ export type CLIOptions = {
   blockedOrigins?: string[];
   blockServiceWorkers?: boolean;
   browser?: string;
+  consoleMessages?: 'include' | 'omit';
   caps?: string[];
   cdpEndpoint?: string;
   config?: string;
@@ -66,6 +67,7 @@ const defaultConfig: FullConfig = {
     allowedOrigins: undefined,
     blockedOrigins: undefined,
   },
+  consoleMessages: 'omit',
   server: {},
   outputDir: path.join(os.tmpdir(), 'playwright-mcp-output', sanitizeForFilePath(new Date().toISOString())),
 };
@@ -81,6 +83,7 @@ export type FullConfig = Config & {
   network: NonNullable<Config['network']>,
   outputDir: string;
   server: NonNullable<Config['server']>,
+  consoleMessages: NonNullable<Config['consoleMessages']>,
 };
 
 export async function resolveConfig(config: Config): Promise<FullConfig> {
@@ -172,6 +175,10 @@ export function configFromCLIOptions(cliOptions: CLIOptions): Config {
   if (cliOptions.blockServiceWorkers)
     contextOptions.serviceWorkers = 'block';
 
+  let consoleMessages: 'include' | 'omit' | undefined = cliOptions.consoleMessages;
+  if (consoleMessages && consoleMessages !== 'include' && consoleMessages !== 'omit')
+    consoleMessages = undefined;
+
   const result: Config = {
     browser: {
       browserName,
@@ -193,6 +200,7 @@ export function configFromCLIOptions(cliOptions: CLIOptions): Config {
     saveTrace: cliOptions.saveTrace,
     outputDir: cliOptions.outputDir,
     imageResponses: cliOptions.imageResponses,
+    consoleMessages,
   };
 
   return result;
@@ -225,6 +233,9 @@ function configFromEnv(): Config {
   options.userAgent = envToString(process.env.PLAYWRIGHT_MCP_USER_AGENT);
   options.userDataDir = envToString(process.env.PLAYWRIGHT_MCP_USER_DATA_DIR);
   options.viewportSize = envToString(process.env.PLAYWRIGHT_MCP_VIEWPORT_SIZE);
+  const consoleMessages = envToString(process.env.PLAYWRIGHT_MCP_CONSOLE_MESSAGES);
+  if (consoleMessages === 'include' || consoleMessages === 'omit')
+    options.consoleMessages = consoleMessages;
   return configFromCLIOptions(options);
 }
 

@@ -34,6 +34,7 @@ program
     .option('--caps <caps>', 'comma-separated list of additional capabilities to enable, possible values: vision, pdf.', commaSeparatedList)
     .option('--cdp-endpoint <endpoint>', 'CDP endpoint to connect to.')
     .option('--config <path>', 'path to the configuration file.')
+    .option('--console-messages <mode>', 'include or omit console messages in tool responses (default: omit)')
     .option('--device <device>', 'device to emulate, for example: "iPhone 15"')
     .option('--executable-path <path>', 'path to the browser executable.')
     .option('--headless', 'run browser in headless mode, headed by default')

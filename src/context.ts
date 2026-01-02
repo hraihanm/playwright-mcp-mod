@@ -132,7 +132,7 @@ export class Context {
   async run(tool: Tool, params: Record<string, unknown> | undefined) {
     // Tab management is done outside of the action() call.
     const toolResult = await tool.handle(this, tool.schema.inputSchema.parse(params || {}));
-    const { code, action, waitForNetwork, captureSnapshot, resultOverride } = toolResult;
+    const { code, action, waitForNetwork, captureSnapshot, resultOverride, suppressConsoleMessages } = toolResult;
 
     if (resultOverride)
       return resultOverride;
@@ -160,6 +160,7 @@ export class Context {
       }
     });
 
+    const includeConsoleMessages = !suppressConsoleMessages && this.config.consoleMessages !== 'omit';
     const result: string[] = [];
     result.push(`### Ran Playwright code
 \`\`\`js
@@ -176,11 +177,13 @@ ${code.join('\n')}
       };
     }
 
-    const messages = tab.takeRecentConsoleMessages();
-    if (messages.length) {
-      result.push('', `### New console messages`);
-      for (const message of messages)
-        result.push(`- ${trim(message.toString(), 100)}`);
+    if (includeConsoleMessages) {
+      const messages = tab.takeRecentConsoleMessages();
+      if (messages.length) {
+        result.push('', `### New console messages`);
+        for (const message of messages)
+          result.push(`- ${trim(message.toString(), 100)}`);
+      }
     }
 
     if (this._downloads.length) {

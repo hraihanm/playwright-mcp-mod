@@ -57,6 +57,7 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
 **Key Updates:**
 - ✨ **ENHANCED**: `browser_take_screenshot` - Now includes coordinate metadata for vision-based interactions with `_xy` tools
 - ✨ **NEW**: `browser_view_html` - Get page HTML with configurable script inclusion and sanitization
+- ✨ **NEW**: `browser_network_requests_simplified` - Filtered network requests optimized for web scraping (excludes analytics, images, fonts)
 - ⚠️ **MODIFIED**: `browser_download_page` - Disabled in favor of `browser_view_html` for better token management
 
 #### ✨ browser_verify_selector
@@ -116,6 +117,39 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
     - `element` (string): Human-readable element description for permission.
     - `ref` (string): Exact target element reference from the page snapshot.
     - `batch` (array, optional): Additional elements to inspect in batch.
+- **Read-only:** true
+
+#### ✨ browser_network_requests_simplified
+
+- **Purpose:**
+  - Returns filtered network requests excluding analytics, tracking, images, and fonts
+  - Optimized for web scraping workflows to identify API calls and pagination requests
+  - Includes query parameters and POST body data for easier endpoint identification
+- **Usage:**
+  - Use this tool when building scrapers to identify relevant API endpoints, pagination patterns, and data fetching requests
+  - Much cleaner output than `browser_network_requests` - filters out noise from analytics and static assets
+  - Perfect for DataHen scraper development where you need to identify pagination URLs and API endpoints
+- **Parameters:**
+  - `includeImages` (boolean, optional, default: false): Whether to include image requests in the output
+  - `includeFonts` (boolean, optional, default: false): Whether to include font requests in the output
+- **Features:**
+  - **Smart filtering** - Automatically excludes:
+    - Analytics and tracking (Google Analytics, Facebook Pixel, TikTok Analytics, Clarity, etc.)
+    - Images (by extension, path patterns, and resource type)
+    - Fonts (Google Fonts, etc.)
+    - CDN assets and other non-essential resources
+  - **Query parameter extraction** - Shows all query parameters from URLs (essential for pagination)
+  - **POST body data** - Includes POST request bodies (truncated if >500 chars) for API endpoint analysis
+  - **Response status codes** - Shows HTTP status for each request
+  - **Configurable filtering** - Options to include images/fonts if needed for specific use cases
+- **Example Output:**
+  ```
+  [GET] https://www.example.com/api/products?page=2 => [200] OK
+    Query Params: page=2
+  [POST] https://www.example.com/ajax?service=info => [200] OK
+    Query Params: service=info
+    Body: {"action":"get_data","id":123}
+  ```
 - **Read-only:** true
 
 #### ✨ browser_take_screenshot (Enhanced)
@@ -289,6 +323,16 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
   - Title: List network requests
   - Description: Returns all network requests since loading the page
   - Parameters: None
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **✨ browser_network_requests_simplified**
+  - Title: List network requests (simplified)
+  - Description: Returns filtered network requests excluding analytics, tracking, images, and fonts. Useful for identifying API calls and pagination requests for web scraping. Includes query parameters and POST body data when available.
+  - Parameters:
+    - `includeImages` (boolean, optional): Whether to include image requests in the output. Defaults to false.
+    - `includeFonts` (boolean, optional): Whether to include font requests in the output. Defaults to false.
   - Read-only: **true**
 
 <!-- NOTE: This has been generated via update-readme.js -->
@@ -529,6 +573,7 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
 - **browser_view_html**: Get page HTML with configurable script inclusion and sanitization
 - **browser_verify_selector**: Verify selector matches and contextually matches expected content
 - **browser_inspect_element**: Reveal selector and DOM tree details of internal references
+- **browser_network_requests_simplified**: Filtered network requests optimized for web scraping (excludes analytics, images, fonts; includes query params and POST bodies)
 - **parser_tester**: Test DataHen parsers using Ruby parser_tester.rb script
 
 #### Modified
