@@ -618,6 +618,14 @@ If you have access to the source repository, you can:
         cleanupTempFile(tempHtmlFile);
       }
 
+      // Normalize line endings (convert \r\n to \n for consistent display)
+      const normalizeOutput = (text: string): string => {
+        return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+      };
+
+      const normalizedStdout = normalizeOutput(stdout);
+      const normalizedStderr = normalizeOutput(stderr);
+
       // Parse the output to provide helpful guidance
       let resultText = `✅ **Parser Test Completed Successfully**
 
@@ -632,13 +640,13 @@ ${command}
 
 **Output:**
 \`\`\`
-${stdout.trim()}
+${normalizedStdout}
 \`\`\``;
 
-      if (stderr.trim()) {
+      if (normalizedStderr) {
         resultText += `\n\n**Warnings/Errors:**
 \`\`\`
-${stderr.trim()}
+${normalizedStderr}
 \`\`\``;
       }
 
@@ -657,12 +665,12 @@ ${command}
 
 **Ruby Error Output:**
 \`\`\`
-${stderr.trim() || 'No error output captured'}
+${normalizedStderr || 'No error output captured'}
 \`\`\`
 
 **Standard Output:**
 \`\`\`
-${stdout.trim() || 'No output captured'}
+${normalizedStdout || 'No output captured'}
 \`\`\`
 
 **Exit Code ${exitCode} typically indicates:**
@@ -698,7 +706,7 @@ ${stdout.trim() || 'No output captured'}
       }
 
       // Analyze output to provide next steps
-      if (stdout.includes('No outputs or pages generated')) {
+      if (normalizedStdout.includes('No outputs or pages generated')) {
         resultText += `\n\n⚠️ **WARNING**: Parser generated no outputs or pages.
 
 **Possible Issues:**
@@ -711,9 +719,23 @@ ${stdout.trim() || 'No output captured'}
 2. Check if selectors in the parser match the actual HTML
 3. Use browser tools to inspect elements and verify selectors
 4. Test with different HTML pages to ensure consistency`;
-      } else if (stdout.includes('Outputs') || stdout.includes('Pages')) {
+      } else if (normalizedStdout.includes('Outputs') || normalizedStdout.includes('Pages')) {
+        // Extract counts for summary
+        const outputsMatch = normalizedStdout.match(/Outputs \((\d+)\)/);
+        const pagesMatch = normalizedStdout.match(/Pages \((\d+)\)/);
+        
+        let summary = '';
+        if (outputsMatch) {
+          summary += `- **${outputsMatch[1]} outputs** generated\n`;
+        }
+        if (pagesMatch) {
+          summary += `- **${pagesMatch[1]} pages** generated\n`;
+        }
+        
         resultText += `\n\n🎯 **Parser is working correctly!**
 
+**Summary:**
+${summary}
 **Next Steps:**
 1. **Test with multiple HTML files** to ensure consistency across different pages
 2. **Verify data quality** by checking extracted fields
