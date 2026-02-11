@@ -19,6 +19,7 @@ import inspector from './inspector.js';
 import html from './html.js';
 import parserTester from './parser_tester.js';
 import networkSimplified from './network_simplified.js';
+import networkSearch from './network_search.js';
 
 // Re-export all tools as a single array
 export default [
@@ -26,4 +27,5 @@ export default [
   ...html,
   ...parserTester,
   ...networkSimplified,
+  ...networkSearch,
 ];

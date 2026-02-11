@@ -58,6 +58,7 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
 - ✨ **ENHANCED**: `browser_take_screenshot` - Now includes coordinate metadata for vision-based interactions with `_xy` tools
 - ✨ **NEW**: `browser_view_html` - Get page HTML with configurable script inclusion and sanitization
 - ✨ **NEW**: `browser_network_requests_simplified` - Filtered network requests optimized for web scraping (excludes analytics, images, fonts)
+- ✨ **NEW**: `browser_network_search` - Search/grep across captured network requests (URLs, headers, response bodies) to find API endpoints returning structured data
 - ⚠️ **MODIFIED**: `browser_download_page` - Disabled in favor of `browser_view_html` for better token management
 
 #### ✨ browser_verify_selector
@@ -149,6 +150,48 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
   [POST] https://www.example.com/ajax?service=info => [200] OK
     Query Params: service=info
     Body: {"action":"get_data","id":123}
+  ```
+- **Read-only:** true
+
+#### ✨ browser_network_search
+
+- **Purpose:**
+  - Search captured network requests like Chrome DevTools Network tab search
+  - Grep a query (string or regex) across URLs, request/response headers, and response bodies
+  - Returns context snippets around matches with `>>>highlight<<<` markers
+  - Enables API-based scraping workflows where product data comes from XHR/fetch JSON responses
+- **Usage:**
+  - Use this tool after page load to discover API endpoints that return structured data (product names, prices, JSON fields)
+  - Pair with `browser_evaluate` to replay discovered API calls with `fetch()`
+  - Workflow: Navigate to page → `browser_network_search({query: "product_name"})` → identify API endpoint → use `browser_evaluate` with `fetch()` to get full response
+- **Parameters:**
+  - `query` (string, required): Search string or regex pattern to find in network requests
+  - `isRegex` (boolean, optional, default: false): Treat query as a regular expression
+  - `searchIn` (array, optional, default: `['url','requestBody','responseBody']`): Which fields to search. Options: `url`, `requestHeaders`, `requestBody`, `responseHeaders`, `responseBody`
+  - `contextChars` (number, optional, default: 120): Characters of context to show before/after each match
+  - `maxResults` (number, optional, default: 20): Maximum number of matching requests to return
+  - `maxMatchesPerField` (number, optional, default: 3): Maximum excerpts per field per request
+  - `includeFilteredDomains` (boolean, optional, default: false): Include analytics/tracking domains normally filtered out
+- **Features:**
+  - **Multi-field search** - Searches across URLs, headers, and response bodies in a single call
+  - **Context snippets** - Shows surrounding text around matches with `>>>highlight<<<` markers for easy identification
+  - **Binary safety** - Automatically skips binary responses (images, PDFs, fonts, etc.) and responses >5MB
+  - **Shared filtering** - Uses the same analytics/tracking domain filter as `browser_network_requests_simplified`
+  - **Match statistics** - Reports total field length, total matches, and number of excerpts shown per field
+  - **Regex support** - Full regex pattern matching with case-insensitive search
+- **Example Output:**
+  ```
+  ## Network Search Results
+  Query: "product_name" | Searched in: url, requestBody, responseBody
+  Found: 3 matching requests (out of 42 total)
+
+  ---
+  ### [1] [GET] https://api.example.com/v2/products?page=1 => [200] OK
+  Resource type: fetch | Content-Type: application/json
+
+  **responseBody** (15234 chars, 8 matches, showing 3):
+    ...{">>>product_name<<<":"Head & Shoulders 400ml","price":299...
+    ...">>>product_name<<<":"Dove Soap 100g","sku":"DS100"...
   ```
 - **Read-only:** true
 
@@ -333,6 +376,21 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
   - Parameters:
     - `includeImages` (boolean, optional): Whether to include image requests in the output. Defaults to false.
     - `includeFonts` (boolean, optional): Whether to include font requests in the output. Defaults to false.
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **✨ browser_network_search**
+  - Title: Search network requests
+  - Description: Search captured network requests like Chrome DevTools Network tab search. Searches across URLs, headers, and response bodies to find API calls containing specific data (e.g., product names, prices, JSON fields). Returns context snippets around matches with >>>highlight<<< markers.
+  - Parameters:
+    - `query` (string): Search string or regex pattern to find in network requests.
+    - `isRegex` (boolean, optional): Treat query as a regular expression. Defaults to false.
+    - `searchIn` (array, optional): Which fields to search: url, requestHeaders, requestBody, responseHeaders, responseBody. Defaults to url, requestBody, responseBody.
+    - `contextChars` (number, optional): Characters of context before/after each match. Defaults to 120.
+    - `maxResults` (number, optional): Maximum matching requests to return. Defaults to 20.
+    - `maxMatchesPerField` (number, optional): Maximum excerpts per field per request. Defaults to 3.
+    - `includeFilteredDomains` (boolean, optional): Include analytics/tracking domains. Defaults to false.
   - Read-only: **true**
 
 <!-- NOTE: This has been generated via update-readme.js -->
@@ -574,6 +632,7 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
 - **browser_verify_selector**: Verify selector matches and contextually matches expected content
 - **browser_inspect_element**: Reveal selector and DOM tree details of internal references
 - **browser_network_requests_simplified**: Filtered network requests optimized for web scraping (excludes analytics, images, fonts; includes query params and POST bodies)
+- **browser_network_search**: Search/grep across captured network requests (URLs, headers, response bodies) to find API endpoints returning structured data — enables API-based scraping workflows
 - **parser_tester**: Test DataHen parsers using Ruby parser_tester.rb script
 
 #### Modified

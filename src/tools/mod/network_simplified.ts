@@ -17,80 +17,7 @@
 import { z } from 'zod';
 import { defineTool } from '../tool.js';
 import type * as playwright from 'playwright';
-
-// Domains and patterns to filter out (analytics, tracking, images, fonts, etc.)
-const FILTERED_DOMAINS = [
-  'analytics.google.com',
-  'google-analytics.com',
-  'googletagmanager.com',
-  'googleads.g.doubleclick.net',
-  'doubleclick.net',
-  'analytics.tiktok.com',
-  'facebook.com',
-  'connect.facebook.net',
-  'clarity.ms',
-  'j.clarity.ms',
-  'fonts.googleapis.com',
-  'fonts.gstatic.com',
-  'cdnjs.cloudflare.com',
-  'cdn.jsdelivr.net',
-  'google.com/ccm',
-  'google.com/pagead',
-  'google.com/privacy_sandbox',
-  'widget.privy.com',
-  'api.privy.com',
-  'tracking.midway.la',
-  'scripts.clarity.ms',
-];
-
-// Image file extensions
-const IMAGE_EXTENSIONS = /\.(jpg|jpeg|png|gif|webp|svg|ico|bmp|tiff)(\?|$)/i;
-
-// Image-related paths
-const IMAGE_PATHS = /\/imgs\//i;
-
-// Check if URL should be filtered
-function shouldFilterRequest(url: string, resourceType?: string): boolean {
-  const urlLower = url.toLowerCase();
-  
-  // Filter by domain
-  for (const domain of FILTERED_DOMAINS) {
-    if (urlLower.includes(domain)) {
-      return true;
-    }
-  }
-  
-  // Filter images by extension
-  if (IMAGE_EXTENSIONS.test(url)) {
-    return true;
-  }
-  
-  // Filter images by path pattern
-  if (IMAGE_PATHS.test(url)) {
-    return true;
-  }
-  
-  // Filter by resource type if available
-  if (resourceType === 'image' || resourceType === 'font') {
-    return true;
-  }
-  
-  return false;
-}
-
-// Extract query parameters from URL
-function extractQueryParams(url: string): Record<string, string> | null {
-  try {
-    const urlObj = new URL(url);
-    const params: Record<string, string> = {};
-    urlObj.searchParams.forEach((value, key) => {
-      params[key] = value;
-    });
-    return Object.keys(params).length > 0 ? params : null;
-  } catch {
-    return null;
-  }
-}
+import { IMAGE_EXTENSIONS, IMAGE_PATHS, shouldFilterRequest, extractQueryParams, getResourceType } from './network_utils.js';
 
 // Format request for output
 function renderSimplifiedRequest(
@@ -160,14 +87,7 @@ const networkSimplified = defineTool({
     
     for (const [request, response] of requests.entries()) {
       const url = request.url();
-      // Safely get resource type - it might not always be available
-      let resourceType: string | undefined;
-      try {
-        resourceType = request.resourceType();
-      } catch {
-        // resourceType might not be available for all requests
-        resourceType = undefined;
-      }
+      const resourceType = getResourceType(request);
       
       // Skip if it's an image and we're not including images
       if (!params.includeImages && (resourceType === 'image' || IMAGE_EXTENSIONS.test(url) || IMAGE_PATHS.test(url))) {
