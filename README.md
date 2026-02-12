@@ -59,7 +59,10 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
 - ✨ **NEW**: `browser_view_html` - Get page HTML with configurable script inclusion and sanitization
 - ✨ **NEW**: `browser_network_requests_simplified` - Filtered network requests optimized for web scraping (excludes analytics, images, fonts)
 - ✨ **NEW**: `browser_network_search` - Search/grep across captured network requests (URLs, headers, response bodies) to find API endpoints returning structured data
+- ✨ **NEW**: `browser_network_download` - Download a captured network response body to a file for offline testing (JSON, XML, etc.)
+- ✨ **NEW**: `browser_request` - Make arbitrary HTTP requests from the browser context (inheriting cookies/session) and save the response to a file
 - ⚠️ **MODIFIED**: `browser_download_page` - Disabled in favor of `browser_view_html` for better token management
+- ✨ **ENHANCED**: `parser_tester` - Now supports JSON and XML content files in addition to HTML, with auto-detection from file extension
 
 #### ✨ browser_verify_selector
 
@@ -195,6 +198,75 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
   ```
 - **Read-only:** true
 
+#### ✨ browser_network_download
+
+- **Purpose:**
+  - Download a captured network response body to a file
+  - Searches captured requests (from the current page load) for a URL matching a given pattern
+  - Saves the response body to a specified output path
+  - Useful for saving API JSON/XML responses for offline parser testing with `parser_tester`
+- **Usage:**
+  - First navigate to a page and let API calls fire, then use this tool to save a response body
+  - Pair with `browser_network_search` to find the right URL pattern first
+  - Workflow: `browser_navigate(url)` → `browser_network_search({query: "products"})` → `browser_network_download({urlPattern: "api.example.com/products", outputPath: "D:\\cache\\products.json"})`
+- **Parameters:**
+  - `urlPattern` (string, required): Substring or regex pattern to match against captured request URLs
+  - `isRegex` (boolean, optional, default: false): Treat urlPattern as a regular expression
+  - `outputPath` (string, required): Absolute path to save the response body to
+  - `matchIndex` (number, optional, default: 0): Which match to download if multiple requests match (0 = first)
+  - `includeFilteredDomains` (boolean, optional, default: false): Include analytics/tracking domains normally filtered out
+- **Features:**
+  - **URL pattern matching** - Substring or regex matching against captured request URLs
+  - **Multiple match support** - Select which match to download when multiple requests match
+  - **Binary safety** - Automatically skips binary responses (images, fonts, etc.) and responses >5MB
+  - **Directory creation** - Automatically creates output directory if it doesn't exist
+  - **Shared filtering** - Uses the same analytics/tracking domain filter as `browser_network_search`
+- **Example Output:**
+  ```
+  ## Network Response Downloaded
+  URL: https://api.example.com/v2/categories
+  Method: GET | Status: 200 OK
+  Content-Type: application/json
+  Content-Length: 15234 chars
+  Saved to: D:\scraper\cache\categories-api.json
+
+  Matched 3 request(s) for pattern "categories", downloaded match #0.
+  ```
+- **Read-only:** true
+
+#### ✨ browser_request
+
+- **Purpose:**
+  - Make an arbitrary HTTP request from the browser context and save the response to a file
+  - Uses `page.evaluate(fetch())` to run inside the browser tab, automatically inheriting cookies, auth tokens, and CORS context
+  - Useful for replaying API calls discovered via `browser_network_search` or forging new API requests
+- **Usage:**
+  - First navigate to a page to establish browser session (cookies, auth), then use this tool to make API calls
+  - The request inherits the browser's cookies and session context automatically
+  - Workflow: `browser_navigate(url)` → `browser_request({url: "https://api.example.com/v2/products", method: "GET", outputPath: "D:\\cache\\products.json"})`
+- **Parameters:**
+  - `url` (string, required): Full URL to request
+  - `method` (enum, optional, default: "GET"): HTTP method: GET, POST, PUT, DELETE, PATCH
+  - `headers` (object, optional, default: {}): Custom request headers as key-value pairs
+  - `body` (string, optional): Request body (for POST/PUT/PATCH requests)
+  - `outputPath` (string, required): Absolute path to save the response body to
+- **Features:**
+  - **Browser context inheritance** - Automatically inherits cookies, auth tokens, and CORS context from the active page
+  - **Multiple HTTP methods** - Supports GET, POST, PUT, DELETE, PATCH
+  - **Custom headers** - Pass any request headers (API keys, Accept headers, etc.)
+  - **Request body** - Send request bodies for POST/PUT/PATCH operations
+  - **Directory creation** - Automatically creates output directory if it doesn't exist
+  - **Size protection** - Skips responses larger than 5MB
+- **Example Output:**
+  ```
+  ## HTTP Request Completed
+  [POST] https://api.example.com/v2/products/search => [200] OK
+  Content-Type: application/json
+  Response size: 23456 chars
+  Saved to: D:\scraper\cache\products-search.json
+  ```
+- **Read-only:** true
+
 #### ✨ browser_take_screenshot (Enhanced)
 
 - **Purpose:**
@@ -223,26 +295,34 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
 #### ✨ parser_tester
 
 - **Purpose:**
-  - Test DataHen parsers using the Ruby parser_tester.rb script with HTML files or URLs
-  - Enforces the mandatory workflow outlined in GEMINI.md guidelines
+  - Test DataHen parsers using the Ruby parser_tester.rb script with HTML, JSON, or XML content files
+  - Supports API-based scraping workflows where parsers consume JSON/XML responses instead of HTML
   - Provides comprehensive error handling and guidance for web scraping development
 - **Usage:**
-  - **MANDATORY**: Always test with HTML files first before using live URLs
-  - Use this tool to validate parser logic, selector accuracy, and data extraction
+  - Use this tool to validate parser logic, selector/field accuracy, and data extraction
+  - For HTML parsers: provide an HTML file or use auto-download from active browser tab
+  - For JSON/XML API parsers: provide a content file (saved via `browser_network_download` or `browser_request`) or use `auto_download_url` to download from a captured network response
   - Parameters:
     - `scraper_dir` (string, required): Path to scraper directory containing config.yaml
     - `parser_path` (string, required): Path to parser file relative to scraper directory
-    - `html_file` (string, optional): Path to local HTML file for testing (recommended)
-    - `url` (string, optional): URL to test (only after successful HTML file testing)
+    - `html_file` (string, optional): Path to local HTML file for testing
+    - `content_file` (string, optional): Path to content file (JSON, XML, or HTML). Auto-detects type from extension
+    - `content_type` (string, optional): Content type override: "json", "xml", or "html". Auto-detected from file extension if not provided
+    - `auto_download_url` (string, optional): URL pattern to match when auto-downloading from network responses (downloads response body instead of page HTML)
+    - `url` (string, optional): URL to test (only after successful file testing)
     - `vars` (string, optional): JSON string of variables to preload
     - `page_type` (string, optional): Page type (details, listings, category, etc.)
     - `priority` (number, optional): Page priority (default: 500)
     - `job_id` (number, optional): Job ID (default: 12345)
     - `quiet` (boolean, optional): Suppress verbose output (default: true)
+    - `auto_download` (boolean, optional): Auto-download content from active browser tab (default: true)
 - **Features:**
-  - Comprehensive file validation (scraper directory, config.yaml, parser files, HTML files)
+  - **Multi-format support** - Handles HTML, JSON, and XML content files with auto-detection from file extension
+  - **API scraping workflow** - Test parsers that use `JSON.parse(content)` with saved API response files
+  - **Network response download** - `auto_download_url` parameter downloads matching captured network responses
+  - Comprehensive file validation (scraper directory, config.yaml, parser files, content files)
   - Intelligent error analysis and troubleshooting guidance
-  - Integration with browser tools for HTML download workflow
+  - Integration with `browser_network_download` and `browser_request` for content acquisition
   - Support for variable passing and context management
 - **Read-only:** true
 
@@ -391,6 +471,32 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
     - `maxResults` (number, optional): Maximum matching requests to return. Defaults to 20.
     - `maxMatchesPerField` (number, optional): Maximum excerpts per field per request. Defaults to 3.
     - `includeFilteredDomains` (boolean, optional): Include analytics/tracking domains. Defaults to false.
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **✨ browser_network_download**
+  - Title: Download network response
+  - Description: Download a captured network response body to a file. Searches captured requests for a URL matching the given pattern and saves the response body to the specified output path.
+  - Parameters:
+    - `urlPattern` (string): Substring or regex pattern to match against captured request URLs.
+    - `isRegex` (boolean, optional): Treat urlPattern as a regular expression. Defaults to false.
+    - `outputPath` (string): Absolute path to save the response body to.
+    - `matchIndex` (number, optional): Which match to download if multiple requests match (0 = first). Defaults to 0.
+    - `includeFilteredDomains` (boolean, optional): Include analytics/tracking domains. Defaults to false.
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
+- **✨ browser_request**
+  - Title: Make HTTP request
+  - Description: Make an arbitrary HTTP request from the browser context (inheriting cookies/session) and save the response body to a file.
+  - Parameters:
+    - `url` (string): Full URL to request.
+    - `method` (enum, optional): HTTP method: GET, POST, PUT, DELETE, PATCH. Defaults to GET.
+    - `headers` (object, optional): Custom request headers as key-value pairs.
+    - `body` (string, optional): Request body (for POST/PUT/PATCH requests).
+    - `outputPath` (string): Absolute path to save the response body to.
   - Read-only: **true**
 
 <!-- NOTE: This has been generated via update-readme.js -->
@@ -633,7 +739,9 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
 - **browser_inspect_element**: Reveal selector and DOM tree details of internal references
 - **browser_network_requests_simplified**: Filtered network requests optimized for web scraping (excludes analytics, images, fonts; includes query params and POST bodies)
 - **browser_network_search**: Search/grep across captured network requests (URLs, headers, response bodies) to find API endpoints returning structured data — enables API-based scraping workflows
-- **parser_tester**: Test DataHen parsers using Ruby parser_tester.rb script
+- **browser_network_download**: Download a captured network response body to a file — save API JSON/XML responses for offline parser testing
+- **browser_request**: Make HTTP requests from the browser context (inheriting cookies/session) and save responses — replay or forge API calls for testing
+- **parser_tester**: Test DataHen parsers using Ruby parser_tester.rb script — now supports HTML, JSON, and XML content with auto-detection
 
 #### Modified
 - **browser_download_page**: Disabled in favor of `browser_view_html` for better token management

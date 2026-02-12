@@ -19,27 +19,36 @@ class ParserTester
 
   def run(url, parser_path, vars = {}, scraper_dir = nil, html_file = nil, options = {})
     @quiet = options[:quiet]
-    
+
     unless @quiet
       puts "=== Parser Tester ==="
     end
-    
+
     if html_file
-      load_html_from_file(html_file)
-      puts "✓ HTML loaded: #{@content.length} characters" unless @quiet
+      load_content_from_file(html_file)
+      puts "✓ Content loaded: #{@content.length} characters" unless @quiet
     elsif url
       fetch_page_content(url)
       puts "✓ Using URL: #{url}" unless @quiet
     else
-      puts "Error: Either URL or HTML file is required"
+      puts "Error: Either URL or content file is required"
       exit 1
     end
-    
+
+    # Detect content type from file extension or explicit option
+    @content_type = detect_content_type(html_file, options[:content_type])
+    puts "✓ Content type: #{@content_type}" unless @quiet
+
     mock_page_variable(url, vars, options)
-    
+
     begin
       execute_parser(parser_path, scraper_dir)
       display_results
+
+      if options[:dump_pages] && @pages.any?
+        File.write(options[:dump_pages], JSON.pretty_generate(@pages))
+        puts "Pages dumped to: #{options[:dump_pages]}" unless @quiet
+      end
     rescue => e
       puts "\n✗ Parser execution failed!"
       puts "Error: #{e.message}"
@@ -52,12 +61,30 @@ class ParserTester
 
   private
 
-  def load_html_from_file(file_path)
+  def detect_content_type(file_path, explicit_type = nil)
+    if explicit_type
+      case explicit_type.downcase
+      when 'json' then 'application/json'
+      when 'xml'  then 'application/xml'
+      when 'html' then 'text/html; charset=UTF-8'
+      else explicit_type  # Pass through if already a MIME type
+      end
+    elsif file_path
+      case File.extname(file_path).downcase
+      when '.json' then 'application/json'
+      when '.xml'  then 'application/xml'
+      else 'text/html; charset=UTF-8'
+      end
+    else
+      'text/html; charset=UTF-8'
+    end
+  end
+
+  def load_content_from_file(file_path)
     unless File.exist?(file_path)
-      raise "HTML file not found: #{file_path}"
+      raise "Content file not found: #{file_path}"
     end
     @content = File.read(file_path)
-    # Don't output HTML content - just show size
   end
 
   def fetch_page_content(url)
@@ -111,9 +138,14 @@ class ParserTester
     # Create cache directory if it doesn't exist
     cache_dir = File.join(Dir.pwd, 'cache')
     Dir.mkdir(cache_dir) unless Dir.exist?(cache_dir)
-    
-    # Create filename based on URL
-    filename = url.gsub(/[^a-zA-Z0-9.-]/, '_') + '.html'
+
+    # Create filename based on URL with correct extension
+    ext = case @content_type
+      when /json/ then '.json'
+      when /xml/  then '.xml'
+      else '.html'
+    end
+    filename = url.gsub(/[^a-zA-Z0-9.-]/, '_') + ext
     File.join(cache_dir, filename)
   end
   
@@ -191,13 +223,13 @@ class ParserTester
       "response_status_code" => fetch_successful ? 200 : 500,
       "response_headers" => fetch_successful ? {
         "Cache-Control" => ["max-age=0, must-revalidate, no-cache, no-store, private"],
-        "Content-Type" => ["text/html; charset=UTF-8"],
+        "Content-Type" => [@content_type || "text/html; charset=UTF-8"],
         "Date" => [Time.now.httpdate],
         "Server" => ["test-server"]
       } : nil,
       "response_cookie" => fetch_successful ? "test_session=abc123; test_token=xyz789" : nil,
       "response_proto" => nil,
-      "content_type" => fetch_successful ? "text/html; charset=UTF-8" : nil,
+      "content_type" => fetch_successful ? (@content_type || "text/html; charset=UTF-8") : nil,
       "content_size" => fetch_successful ? (@content ? @content.length : 0) : nil,
       "vars" => vars,
       "failed_response_checksum" => fetch_successful ? nil : "failed-checksum",
@@ -211,7 +243,7 @@ class ParserTester
       "failed_response_proto" => nil,
       "failed_effective_url" => fetch_successful ? nil : (url || "test://localhost"),
       "failed_at" => fetch_successful ? nil : Time.now.iso8601,
-      "failed_content_type" => fetch_successful ? nil : "text/html; charset=UTF-8",
+      "failed_content_type" => fetch_successful ? nil : (@content_type || "text/html; charset=UTF-8"),
       "driver" => nil,
       "display" => nil,
       "screenshot" => nil,
@@ -301,7 +333,7 @@ class ParserTester
   def create_parser_binding
     pages = @pages
     outputs = @outputs
-    
+
     # Set content and failed_content based on fetch success/failure
     has_content = @content && @content.length > 0
     if has_content
@@ -311,22 +343,30 @@ class ParserTester
       content = nil             # No successful content
       failed_content = @content # Failed content (if any)
     end
-    
+
     page = @page
-    html = Nokogiri::HTML(content) if content
-    
+
+    # Only create Nokogiri HTML object for HTML content
+    # JSON/XML parsers use content directly via JSON.parse(content) or Nokogiri::XML()
+    detected_type = @content_type || 'text/html'
+    if detected_type.include?('html')
+      html = Nokogiri::HTML(content) if content
+    else
+      html = nil
+    end
+
     def finish
       return
     end
-    
+
     def limbo(gid)
       # Silent mock function
     end
-    
+
     def save_outputs(outputs_array)
       # Silent mock function
     end
-    
+
     binding
   end
 
@@ -429,8 +469,12 @@ def main
       options[:url] = url
     end
       
-    opts.on("-H", "--html FILE", "Path to local HTML file to use instead of fetching") do |file|
+    opts.on("-H", "--html FILE", "--content FILE", "Path to content file (HTML, JSON, or XML)") do |file|
       options[:html] = file
+    end
+
+    opts.on("--content-type TYPE", "Content type: html, json, or xml (auto-detected from file extension if not specified)") do |type|
+      options[:content_type] = type
     end
     
     opts.on("-v", "--vars VARS", "JSON string of variables to preload") do |vars|
@@ -451,6 +495,10 @@ def main
     
     opts.on("--quiet", "Suppress verbose output, show only essential results") do
       options[:quiet] = true
+    end
+
+    opts.on("--dump-pages FILE", "Dump full pages array as JSON to file") do |file|
+      options[:dump_pages] = file
     end
     
     opts.on("-h", "--help", "Show this help message") do

@@ -20,6 +20,8 @@ import html from './html.js';
 import parserTester from './parser_tester.js';
 import networkSimplified from './network_simplified.js';
 import networkSearch from './network_search.js';
+import networkDownload from './network_download.js';
+import networkRequest from './network_request.js';
 
 // Re-export all tools as a single array
 export default [
@@ -28,4 +30,6 @@ export default [
   ...parserTester,
   ...networkSimplified,
   ...networkSearch,
+  ...networkDownload,
+  ...networkRequest,
 ];
