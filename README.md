@@ -56,6 +56,7 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
 
 **Key Updates:**
 - ✨ **ENHANCED**: `browser_take_screenshot` - Now includes coordinate metadata for vision-based interactions with `_xy` tools
+- ✨ **NEW**: `browser_grep_html` - Grep page HTML with context snippets around matches — token-efficient selector discovery (removes path noise, keeps SVG containers)
 - ✨ **NEW**: `browser_view_html` - Get page HTML with configurable script inclusion and sanitization
 - ✨ **NEW**: `browser_network_requests_simplified` - Filtered network requests optimized for web scraping (excludes analytics, images, fonts)
 - ✨ **NEW**: `browser_network_search` - Search/grep across captured network requests (URLs, headers, response bodies) to find API endpoints returning structured data
@@ -86,6 +87,81 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
     - Supports batch verification
 - **Read-only:** true
 
+#### ✨ datahen_run
+
+- **Purpose:**
+  - Run the local DataHen V3 pipeline runner to mimic the real DataHen scraper lifecycle on your machine.
+  - Executes the seeder, fetches pages via HTTP, routes them to the correct parser via `config.yaml`, and persists outputs — all without deploying to DataHen.
+  - State is stored in `<scraper_dir>/.local-state/` (queue, outputs, HTTP cache).
+- **Usage:**
+  - Use this tool to test the full scraper pipeline end-to-end: seed → step → outputs.
+  - Use `page_type` filter to process one parser at a time during development.
+  - Workflow: `seed` → `status` → `step --page-type categories` → `step --page-type listings --count 3` → `outputs`
+- **Parameters:**
+  - `scraper_dir` (string, required): Absolute path to scraper directory containing `config.yaml`.
+  - `command` (enum, required): `seed` | `step` | `status` | `pages` | `outputs` | `reset`
+  - `count` (number, optional, default: 1): Pages to fetch+parse per `step`.
+  - `page_type` (string, optional): Filter by `page_type` for `step` and `pages` commands.
+  - `status_filter` (string, optional): Filter pages by status for `pages` command.
+  - `collection` (string, optional): Filter by collection name for `outputs` command.
+  - `limit` (number, optional, default: 20): Max items to display.
+  - `delay` (number, optional, default: 0.5): Seconds between HTTP fetches.
+  - `quiet` (boolean, optional, default: false): Suppress verbose output.
+- **Commands:**
+  - **`seed`** — Runs `seeder/seeder.rb`, populates `.local-state/queue.json` with initial pages.
+  - **`step`** — Fetches N pages from queue, runs their parsers, enqueues new pages, saves outputs. `save_pages()` and `save_outputs()` work as in real DataHen (flush + clear array).
+  - **`status`** — Shows queue counts (to_fetch / parsed / failed) and output collection sizes.
+  - **`pages`** — Lists pages in the queue with status and vars.
+  - **`outputs`** — Shows collected outputs per collection.
+  - **`reset`** — Clears all state (queue, outputs, cache).
+- **State structure:**
+  ```
+  <scraper_dir>/
+  └── .local-state/
+      ├── queue.json          # page queue (status lifecycle)
+      ├── outputs/
+      │   ├── products.json   # outputs by collection
+      │   └── default.json
+      └── cache/
+          └── <gid>           # cached HTTP responses by GID
+  ```
+- **Read-only:** true
+
+#### ✨ browser_grep_html
+
+- **Purpose:**
+  - Search the current page HTML for a string or regex and return context snippets around matches.
+  - Token-efficient alternative to `browser_view_html` for targeted selector discovery.
+  - Ideal for finding CSS class names, data attributes, and DOM structure around known text content (product names, prices, labels).
+- **Usage:**
+  - Use this tool when you know a piece of text on the page and want to discover the CSS selector for it.
+  - Sanitizes HTML by default: removes scripts, styles, and SVG path/shape data while **keeping SVG container elements** (`<svg>`, `<g>`, `<use>`) so icon class names remain visible.
+  - Workflow: navigate to page → `browser_grep_html({query: "Add to Cart"})` → see surrounding DOM with class names → write CSS selector
+- **Parameters:**
+  - `query` (string, required): Search string or regex pattern.
+  - `isRegex` (boolean, optional, default: false): Treat query as a regular expression.
+  - `contextChars` (number, optional, default: 200): Characters of HTML context to show before and after each match.
+  - `maxMatches` (number, optional, default: 20): Maximum number of snippets to return.
+  - `includeScripts` (boolean, optional, default: false): Include script content when searching.
+  - `sanitize` (boolean, optional, default: true): Sanitize HTML before searching.
+- **Features:**
+  - **Context snippets** - Shows surrounding HTML with `>>>match<<<` markers
+  - **Path-aware sanitization** - Removes `<path>`, `<circle>`, `<rect>` and SVG filter elements but keeps `<svg>`, `<g>`, `<use>` containers so icon classes are visible
+  - **Token-efficient** - Returns only snippets around matches, not the full page HTML
+  - **Regex support** - Full regex pattern matching with case-insensitive search
+- **Example Output:**
+  ```
+  ## HTML Grep Results
+  Query: "Add to Cart"
+  Found: 3 match(es) in 45231 chars of HTML (sanitized: styles/paths removed, SVG containers kept)
+  Showing: 3 snippet(s)
+
+  --- Match 1 of 3 ---
+  ...<div class="product-actions"><button class="btn btn-primary add-to-cart" data-product-id="12345"><svg class="icon-cart" width="20" height="20"><use href="#icon-cart"/></svg>
+  >>>Add to Cart<<<</button></div>...
+  ```
+- **Read-only:** true
+
 #### ✨ browser_view_html
 
 - **Purpose:**
@@ -99,7 +175,7 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
   - `isSanitized` (boolean, optional, default: true): Whether to sanitize the HTML content. Defaults to true to reduce token usage and remove potentially sensitive content.
 - **Features:**
   - **Configurable script inclusion/exclusion** - Control whether to include JavaScript code
-  - **Advanced HTML sanitization** - Mainly removes `svg` and `scripts` elements.
+  - **Advanced HTML sanitization** - Removes all SVG elements, scripts, and styles.
   - **Token usage optimization** - Smart defaults to minimize token consumption
   - **Direct HTML content return** - No file saving required, content returned directly to agent
 - **Read-only:** true
@@ -590,6 +666,20 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
 
 <!-- NOTE: This has been generated via update-readme.js -->
 
+- **✨ browser_grep_html**
+  - Title: Grep page HTML
+  - Description: Search the current page HTML for a string or regex and return context snippets around matches with >>>highlight<<< markers. More token-efficient than browser_view_html for targeted selector discovery. Sanitizes HTML by default: removes scripts, styles, and SVG path/shape data while keeping SVG container elements (svg, g, use) so icon classes remain visible.
+  - Parameters:
+    - `query` (string): Search string or regex pattern to find in the page HTML.
+    - `isRegex` (boolean, optional): Treat query as a regular expression. Defaults to false.
+    - `contextChars` (number, optional): Characters of HTML context before/after each match. Defaults to 200.
+    - `maxMatches` (number, optional): Maximum number of match snippets to return. Defaults to 20.
+    - `includeScripts` (boolean, optional): Include script content when searching. Defaults to false.
+    - `sanitize` (boolean, optional): Sanitize HTML before searching. Defaults to true.
+  - Read-only: **true**
+
+<!-- NOTE: This has been generated via update-readme.js -->
+
 - **✨ browser_view_html**
   - Title: View page HTML
   - Description: Get the HTML content of the current page with options for including scripts and sanitization.
@@ -734,6 +824,8 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
   - Updated tool description to clarify coordinate-based interaction capabilities
 
 #### Added
+- **datahen_run**: Local DataHen V3 pipeline runner — seed, step (fetch+parse), status, pages, outputs, reset; `save_pages()`/`save_outputs()` behave like real DataHen platform
+- **browser_grep_html**: Search page HTML with context snippets — token-efficient selector discovery; removes SVG path noise while keeping container elements for icon class visibility
 - **browser_view_html**: Get page HTML with configurable script inclusion and sanitization
 - **browser_verify_selector**: Verify selector matches and contextually matches expected content
 - **browser_inspect_element**: Reveal selector and DOM tree details of internal references

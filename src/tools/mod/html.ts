@@ -22,129 +22,168 @@ import sanitize from 'html-sanitize';
 
 import * as fs from 'fs/promises';
 
-// HTML Sanitization Configuration
-// This configuration controls what gets removed/limited from HTML content
-const SANITIZATION_CONFIG = {
-  // Tags to remove by default (useless tags that don't contain important content)
-  removeTags: [
-    'style', 'svg', 'path', 'circle', 'rect', 'polygon', 'line', 'g', 'defs', 
-    'clipPath', 'mask', 'filter', 'feGaussianBlur', 'feOffset', 'feMerge', 
-    'feMergeNode', 'feComposite', 'feBlend', 'feColorMatrix', 'feComponentTransfer', 
-    'feFuncR', 'feFuncG', 'feFuncB', 'feFuncA', 'feConvolveMatrix', 'feDiffuseLighting', 
-    'feSpecularLighting', 'feDistantLight', 'fePointLight', 'feSpotLight', 'feTile', 
-    'feTurbulence', 'feMorphology', 'feImage', 'feDisplacementMap', 'feFlood', 'feDropShadow'
-  ],
-  
-  // Attribute value limits to prevent extremely long URLs/attributes
-  attributeLimits: {
-    href: 300,      // Links
-    src: 300,       // Images, scripts, etc.
-    srcset: 300,    // Image srcset
-    'data-src': 500, // Lazy loading images
-    style: 200,     // Inline styles
-    class: 500,     // CSS classes
-    id: 500,        // Element IDs
-    data: 500       // Data attributes
-  },
-  
-  // Default sanitization options
-  defaults: {
-    removeStyleTags: true,
-    removeSvgElements: true,
-    limitUrlAttributes: true,
-    maxAttributeValueLength: 200
-  }
+// --- SVG tag categories ---
+
+// SVG shape/drawing elements — contain verbose `d="M..."` paths, no scraping value
+const SVG_SHAPE_TAGS = [
+  'path', 'circle', 'rect', 'polygon', 'polyline', 'line', 'ellipse',
+];
+
+// SVG definitions/filter elements — clip paths, masks, effects; always noise
+const SVG_FILTER_TAGS = [
+  'defs', 'clipPath', 'mask', 'filter',
+  'feGaussianBlur', 'feOffset', 'feMerge', 'feMergeNode',
+  'feComposite', 'feBlend', 'feColorMatrix', 'feComponentTransfer',
+  'feFuncR', 'feFuncG', 'feFuncB', 'feFuncA', 'feConvolveMatrix',
+  'feDiffuseLighting', 'feSpecularLighting', 'feDistantLight',
+  'fePointLight', 'feSpotLight', 'feTile', 'feTurbulence', 'feMorphology',
+  'feImage', 'feDisplacementMap', 'feFlood', 'feDropShadow',
+];
+
+// SVG container elements — useful to keep so you can see icon class/id/aria-label
+const SVG_CONTAINER_TAGS = ['svg', 'g', 'symbol', 'use', 'text', 'tspan'];
+
+// All SVG-related tags combined
+const SVG_ALL_TAGS = [...SVG_CONTAINER_TAGS, ...SVG_SHAPE_TAGS, ...SVG_FILTER_TAGS];
+
+// --- Attribute limits ---
+
+const ATTRIBUTE_LIMITS: Record<string, number> = {
+  href: 300,
+  src: 300,
+  srcset: 300,
+  'data-src': 500,
+  style: 200,
+  class: 500,
+  id: 500,
+  data: 500,
 };
 
-// Simple configuration interface for HTML sanitization
+// --- Sanitization ---
+
 interface SanitizeConfig {
   removeStyleTags?: boolean;
+  /** Remove ALL svg-related elements (default: true). */
   removeSvgElements?: boolean;
+  /** Remove only SVG shape/path/filter elements but keep svg container tags.
+   *  Only applies when removeSvgElements is false. Defaults to true. */
+  removePathElements?: boolean;
   limitUrlAttributes?: boolean;
   maxAttributeValueLength?: number;
 }
 
-// Helper function to create sanitization configuration based on options
 function createSanitizeConfig(options: SanitizeConfig = {}) {
-  const config = {
-    allowedTags: [
-      'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-      'a', 'button', 'input', 'textarea', 'select', 'option',
-      'form', 'label', 'ul', 'ol', 'li', 'table', 'tr', 'td', 'th',
-      'img', 'iframe', 'section', 'article', 'header', 'footer',
-      'nav', 'main', 'aside', 'figure', 'figcaption', 'blockquote',
-      'code', 'pre', 'em', 'strong', 'b', 'i', 'u', 'mark', 'small',
-      'script', 'noscript', 'object', 'embed', 'applet', 
-      'base', 'basefont', 'bgsound', 'link', 'meta', 'title', 
-      'head', 'html', 'body'
-    ],
-    allowedAttributes: '*',
-    removeTags: [] as string[],
-    removeAttributes: [] as string[],
-    compactMode: true
-  };
-  
-  // Add tags to remove based on options
-  const tagsToRemove = [...SANITIZATION_CONFIG.removeTags];
-  
-  if (options.removeStyleTags !== false) {
+  const allowedTags = [
+    'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'a', 'button', 'input', 'textarea', 'select', 'option',
+    'form', 'label', 'ul', 'ol', 'li', 'table', 'tr', 'td', 'th',
+    'img', 'iframe', 'section', 'article', 'header', 'footer',
+    'nav', 'main', 'aside', 'figure', 'figcaption', 'blockquote',
+    'code', 'pre', 'em', 'strong', 'b', 'i', 'u', 'mark', 'small',
+    'script', 'noscript', 'object', 'embed', 'applet',
+    'base', 'basefont', 'bgsound', 'link', 'meta', 'title',
+    'head', 'html', 'body',
+  ];
+
+  const tagsToRemove: string[] = [];
+
+  if (options.removeStyleTags !== false)
     tagsToRemove.push('style');
-  }
-  
+
   if (options.removeSvgElements !== false) {
-    const svgTags = ['svg', 'path', 'circle', 'rect', 'polygon', 'line', 'g', 'defs', 'clipPath', 'mask', 'filter', 'feGaussianBlur', 'feOffset', 'feMerge', 'feMergeNode', 'feComposite', 'feBlend', 'feColorMatrix', 'feComponentTransfer', 'feFuncR', 'feFuncG', 'feFuncB', 'feFuncA', 'feConvolveMatrix', 'feDiffuseLighting', 'feSpecularLighting', 'feDistantLight', 'fePointLight', 'feSpotLight', 'feTile', 'feTurbulence', 'feMorphology', 'feImage', 'feDisplacementMap', 'feFlood', 'feDropShadow'];
-    tagsToRemove.push(...svgTags);
+    // Default: remove ALL svg-related elements
+    tagsToRemove.push(...SVG_ALL_TAGS);
+  } else {
+    // Keep svg container tags — add them to allowedTags so they pass through
+    allowedTags.push(...SVG_CONTAINER_TAGS);
+    // Remove shape/filter elements (path noise) unless explicitly disabled
+    if (options.removePathElements !== false)
+      tagsToRemove.push(...SVG_SHAPE_TAGS, ...SVG_FILTER_TAGS);
   }
-  
-  config.removeTags = [...new Set(tagsToRemove)]; // Remove duplicates
-  
-  return config;
+
+  return {
+    allowedTags,
+    allowedAttributes: '*',
+    removeTags: [...new Set(tagsToRemove)],
+    removeAttributes: [] as string[],
+    compactMode: true,
+  };
 }
 
-// Helper function to limit attribute values in HTML
 function limitAttributeValues(html: string, options: SanitizeConfig = {}): string {
-  if (options.limitUrlAttributes === false) {
+  if (options.limitUrlAttributes === false)
     return html;
-  }
-  
-  const maxLength = options.maxAttributeValueLength || SANITIZATION_CONFIG.defaults.maxAttributeValueLength;
-  const limits = SANITIZATION_CONFIG.attributeLimits;
-  
-  // Apply attribute value limits
+
+  const maxLength = options.maxAttributeValueLength || 200;
+
   return html.replace(/(\w+)=["']([^"']*)["']/g, (match, attr, value) => {
-    const attrMaxLength = limits[attr.toLowerCase() as keyof typeof limits] || maxLength;
-    if (value.length > attrMaxLength) {
+    const attrMaxLength = ATTRIBUTE_LIMITS[attr.toLowerCase() as keyof typeof ATTRIBUTE_LIMITS] || maxLength;
+    if (value.length > attrMaxLength)
       return `${attr}="${value.substring(0, attrMaxLength)}..."`;
-    }
     return match;
   });
 }
 
-// Helper function to sanitize HTML content without truncating
 function sanitizeHTML(html: string, options: SanitizeConfig = {}): string {
   if (!html || html.length === 0) return '';
-  
+
   try {
-    // Create sanitization configuration
     const sanitizeConfig = createSanitizeConfig(options);
-    
-    // Apply sanitization
     let sanitized = sanitize(html, sanitizeConfig);
-    
-    // Apply attribute value limits
     sanitized = limitAttributeValues(sanitized, options);
-    
-    // Additional post-processing to ensure clean output
+
     return sanitized
-      .replace(/\s+/g, ' ') // Normalize whitespace
-      .replace(/>\s+</g, '><') // Remove whitespace between tags
+      .replace(/\s+/g, ' ')
+      .replace(/>\s+</g, '><')
       .trim();
   } catch (error) {
-    // If sanitization fails, return the original HTML
     console.warn('HTML sanitization failed:', error);
     return html;
   }
 }
+
+// --- Snippet extraction (grep helper) ---
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function extractSnippets(
+  text: string,
+  regex: RegExp,
+  contextChars: number,
+  maxMatches: number,
+): { snippets: string[]; totalMatches: number } {
+  const snippets: string[] = [];
+  let totalMatches = 0;
+  let match: RegExpExecArray | null;
+
+  const globalRegex = new RegExp(
+    regex.source,
+    regex.flags.includes('g') ? regex.flags : regex.flags + 'g',
+  );
+
+  while ((match = globalRegex.exec(text)) !== null) {
+    totalMatches++;
+    if (snippets.length < maxMatches) {
+      const start = Math.max(0, match.index - contextChars);
+      const end = Math.min(text.length, match.index + match[0].length + contextChars);
+      const before = text.substring(start, match.index);
+      const after = text.substring(match.index + match[0].length, end);
+      const prefix = start > 0 ? '...' : '';
+      const suffix = end < text.length ? '...' : '';
+      snippets.push(`${prefix}${before}>>>${match[0]}<<<${after}${suffix}`);
+    }
+    if (match[0].length === 0)
+      globalRegex.lastIndex++;
+  }
+
+  return { snippets, totalMatches };
+}
+
+// ============================================================
+// Tool: browser_view_html
+// ============================================================
 
 const viewHtmlSchema = z.object({
   includeScripts: z.boolean().optional().default(false).describe('Whether to include script tags in the HTML output. Defaults to false to reduce token usage.'),
@@ -162,31 +201,25 @@ const viewHtml = defineTool({
   },
   handle: async (context, params) => {
     const tab = await context.ensureTab();
-    
+
     const code = [
       `// Get page HTML content`,
       `const html = await page.content();`,
       `// HTML content retrieved${params.isSanitized ? ' (sanitized)' : ''}${params.includeScripts ? ' (including scripts)' : ' (scripts excluded)'}`,
     ];
 
-    // Execute the action immediately to get HTML content
     let html = await tab.page.content();
-    
-    // Remove scripts if not requested
-    if (!params.includeScripts) {
+
+    if (!params.includeScripts)
       html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-    }
-    
-    // Sanitize if requested using defaults from SANITIZATION_CONFIG
+
     if (params.isSanitized) {
-      const sanitizeOptions: SanitizeConfig = {
-        removeStyleTags: SANITIZATION_CONFIG.defaults.removeStyleTags,
-        removeSvgElements: SANITIZATION_CONFIG.defaults.removeSvgElements,
-        limitUrlAttributes: SANITIZATION_CONFIG.defaults.limitUrlAttributes,
-        maxAttributeValueLength: SANITIZATION_CONFIG.defaults.maxAttributeValueLength
-      };
-      
-      html = sanitizeHTML(html, sanitizeOptions);
+      html = sanitizeHTML(html, {
+        removeStyleTags: true,
+        removeSvgElements: true,
+        limitUrlAttributes: true,
+        maxAttributeValueLength: 200,
+      });
     }
 
     return {
@@ -194,16 +227,103 @@ const viewHtml = defineTool({
       captureSnapshot: false,
       waitForNetwork: false,
       resultOverride: {
-        content: [
-          {
-            type: 'text' as const,
-            text: html
-          }
-        ]
+        content: [{ type: 'text' as const, text: html }],
       },
     };
   },
 });
+
+// ============================================================
+// Tool: browser_grep_html
+// ============================================================
+
+const grepHtmlSchema = z.object({
+  query: z.string().describe('Search string or regex pattern to find in the page HTML.'),
+  isRegex: z.boolean().optional().default(false).describe('Treat query as a regular expression. Defaults to false (literal string match).'),
+  contextChars: z.number().optional().default(200).describe('Characters of HTML context to show before and after each match. Defaults to 200.'),
+  maxMatches: z.number().optional().default(20).describe('Maximum number of match snippets to return. Defaults to 20.'),
+  includeScripts: z.boolean().optional().default(false).describe('Include script tag content when searching. Defaults to false.'),
+  sanitize: z.boolean().optional().default(true).describe('Sanitize HTML before searching: removes styles and SVG path/shape data while keeping SVG container elements (svg, g, use). Defaults to true.'),
+});
+
+const grepHtml = defineTool({
+  capability: 'core',
+  schema: {
+    name: 'browser_grep_html',
+    title: 'Grep page HTML',
+    description: 'Search the current page HTML for a string or regex and return context snippets around matches with >>>highlight<<< markers. More token-efficient than browser_view_html for targeted searches. Ideal for discovering CSS selectors, class names, data attributes, and DOM structure around known text content (e.g., a product name or price). Sanitizes HTML by default: removes scripts, styles, and SVG path/shape data while keeping SVG container elements so icon classes are visible.',
+    inputSchema: grepHtmlSchema,
+    type: 'readOnly',
+  },
+  handle: async (context, params) => {
+    const tab = await context.ensureTab();
+    let html = await tab.page.content();
+
+    if (!params.includeScripts)
+      html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+
+    if (params.sanitize) {
+      html = sanitizeHTML(html, {
+        removeStyleTags: true,
+        removeSvgElements: false,   // keep <svg> containers
+        removePathElements: true,   // remove <path>, <circle>, filters etc.
+        limitUrlAttributes: true,
+        maxAttributeValueLength: 200,
+      });
+    }
+
+    let regex: RegExp;
+    try {
+      const pattern = params.isRegex ? params.query : escapeRegex(params.query);
+      regex = new RegExp(pattern, 'gi');
+    } catch (e: unknown) {
+      return {
+        code: [`// browser_grep_html`],
+        captureSnapshot: false,
+        waitForNetwork: false,
+        resultOverride: {
+          content: [{ type: 'text', text: `Invalid regex pattern: ${(e as Error).message}` }],
+        },
+      };
+    }
+
+    const { snippets, totalMatches } = extractSnippets(
+      html, regex, params.contextChars, params.maxMatches,
+    );
+
+    const sanitizeNote = params.sanitize
+      ? ' (sanitized: styles/paths removed, SVG containers kept)'
+      : '';
+
+    const lines: string[] = [
+      `## HTML Grep Results`,
+      `Query: "${params.query}"${params.isRegex ? ' (regex)' : ''}`,
+      `Found: ${totalMatches} match(es) in ${html.length} chars of HTML${sanitizeNote}`,
+      `Showing: ${snippets.length} snippet(s)`,
+    ];
+
+    if (snippets.length === 0) {
+      lines.push('', 'No matches found.');
+    } else {
+      for (let i = 0; i < snippets.length; i++) {
+        lines.push('', `--- Match ${i + 1} of ${totalMatches} ---`, snippets[i]);
+      }
+    }
+
+    return {
+      code: [`// browser_grep_html("${params.query}")`],
+      captureSnapshot: false,
+      waitForNetwork: false,
+      resultOverride: {
+        content: [{ type: 'text', text: lines.join('\n') }],
+      },
+    };
+  },
+});
+
+// ============================================================
+// Disabled: browser_download_page
+// ============================================================
 
 const downloadPageSchema = z.object({
   url: z.string().optional().describe('The URL to download. If omitted, uses the currently active tab.'),
@@ -221,11 +341,10 @@ const downloadPage = defineTool({
     type: 'readOnly',
   },
   handle: async (context, params) => {
-    // Tool is disabled - return error message
     return {
       code: [`// Tool is disabled`],
       action: async () => {
-        throw new Error('Download tool is currently disabled. Use browser_view_html instead.');
+        throw new Error('Download tool is currently disabled. Use browser_view_html or browser_grep_html instead.');
       },
       captureSnapshot: false,
       waitForNetwork: false,
@@ -235,7 +354,6 @@ const downloadPage = defineTool({
 
 export default [
   viewHtml,
+  grepHtml,
   // downloadPage, // Disabled - keeping for reference
 ];
-
-
