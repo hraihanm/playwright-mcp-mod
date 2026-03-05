@@ -56,6 +56,7 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
 
 **Key Updates:**
 - ✨ **ENHANCED**: `browser_take_screenshot` - Now includes coordinate metadata for vision-based interactions with `_xy` tools
+- ✨ **NEW**: `datahen_run` - Local DataHen V3 pipeline runner — seed, step-by-step fetch+parse, queue inspection, output viewing (mimics real DataHen lifecycle)
 - ✨ **NEW**: `browser_grep_html` - Grep page HTML with context snippets around matches — token-efficient selector discovery (removes path noise, keeps SVG containers)
 - ✨ **NEW**: `browser_view_html` - Get page HTML with configurable script inclusion and sanitization
 - ✨ **NEW**: `browser_network_requests_simplified` - Filtered network requests optimized for web scraping (excludes analytics, images, fonts)
