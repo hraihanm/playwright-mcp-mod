@@ -24,6 +24,7 @@ import networkDownload from './network_download.js';
 import networkRequest from './network_request.js';
 import datahenRun from './datahen_run.js';
 import jsonLd from './json_ld.js';
+import domUtils from './dom_utils.js';
 
 // Re-export all tools as a single array
 export default [
@@ -36,4 +37,5 @@ export default [
   ...networkRequest,
   ...datahenRun,
   ...jsonLd,
+  ...domUtils,
 ];
