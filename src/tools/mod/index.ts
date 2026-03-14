@@ -26,6 +26,7 @@ import datahenRun from './datahen_run.js';
 import jsonLd from './json_ld.js';
 import domUtils from './dom_utils.js';
 import networkReplay from './network_replay.js';
+import scraperValidator from './scraper_validator.js';
 
 // Re-export all tools as a single array
 export default [
@@ -40,4 +41,5 @@ export default [
   ...jsonLd,
   ...domUtils,
   ...networkReplay,
+  ...scraperValidator,
 ];
