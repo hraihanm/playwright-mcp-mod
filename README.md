@@ -59,12 +59,18 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
 - ✨ **NEW**: `datahen_run` - Local DataHen V3 pipeline runner — seed, step-by-step fetch+parse, queue inspection, output viewing (mimics real DataHen lifecycle)
 - ✨ **NEW**: `browser_grep_html` - Grep page HTML with context snippets around matches — token-efficient selector discovery (removes path noise, keeps SVG containers)
 - ✨ **NEW**: `browser_view_html` - Get page HTML with configurable script inclusion and sanitization
+- ✨ **NEW**: `browser_extract_json_ld` - Extract and parse JSON-LD blocks from the page with optional `@type` filtering
+- ✨ **NEW**: `browser_count_selector` - Count CSS selector matches with optional min/max expectation checks
+- ✨ **NEW**: `browser_extract_images` - Extract image URLs from a container with lazy-load/source attribute awareness
+- ✨ **NEW**: `browser_detect_pagination` - Detect listing pagination strategy (`count_based`, `next_button`, or `url_pattern`) with confidence scoring
 - ✨ **NEW**: `browser_network_requests_simplified` - Filtered network requests optimized for web scraping (excludes analytics, images, fonts)
 - ✨ **NEW**: `browser_network_search` - Search/grep across captured network requests (URLs, headers, response bodies) to find API endpoints returning structured data
 - ✨ **NEW**: `browser_network_download` - Download a captured network response body to a file for offline testing (JSON, XML, etc.)
 - ✨ **NEW**: `browser_request` - Make arbitrary HTTP requests from the browser context (inheriting cookies/session) and save the response to a file
+- ✨ **NEW**: `browser_network_replay` - Replay a captured network request (method/headers/body) in browser context and save response
+- ✨ **NEW**: `scraper_output_validator` - Validate parser outputs against scraper `config.yaml` exporter fields
 - ⚠️ **MODIFIED**: `browser_download_page` - Disabled in favor of `browser_view_html` for better token management
-- ✨ **ENHANCED**: `parser_tester` - Now supports JSON and XML content files in addition to HTML, with auto-detection from file extension
+- ✨ **ENHANCED**: `parser_tester` - Supports JSON/XML inputs, auto network download, multi-file batch testing, and optional generated-page verification
 
 #### ✨ browser_verify_selector
 
@@ -344,6 +350,90 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
   ```
 - **Read-only:** true
 
+#### ✨ browser_extract_json_ld
+
+- **Purpose:**
+  - Extract JSON-LD from `<script type="application/ld+json">` tags and parse it into structured output.
+  - Supports optional `@type` filtering (for example, `Product`) and returns available fields in dot notation.
+- **Usage:**
+  - Use this first on product/listing pages to quickly discover schema-based fields before writing selectors.
+  - Parameters:
+    - `type` (string, optional): Filter by `@type` value (for example, `Product`).
+- **Features:**
+  - Handles single object, arrays, and `@graph` payloads.
+  - Returns `script_tag_selector` to help inspect the originating script block.
+  - Lists `fields_available` to speed up parser field mapping.
+- **Read-only:** true
+
+#### ✨ browser_count_selector
+
+- **Purpose:**
+  - Count how many elements on the current page match a CSS selector.
+  - Optionally compare count against expected ranges for quick validation.
+- **Usage:**
+  - Use this while refining selectors to catch over-broad or too-narrow matches.
+  - Parameters:
+    - `selector` (string, required): CSS selector to count.
+    - `expected_min` (number, optional): Warn when count is below this value.
+    - `expected_max` (number, optional): Warn when count is above this value.
+- **Read-only:** true
+
+#### ✨ browser_extract_images
+
+- **Purpose:**
+  - Extract image URLs from a container/gallery element in one call.
+  - Supports common lazy-loading attributes (`data-src`, `data-lazy`, `data-original`, `data-zoom-image`) and `srcset`.
+- **Usage:**
+  - Use this for product image scraping instead of chaining multiple manual `browser_evaluate` checks.
+  - Parameters:
+    - `container_selector` (string, required): CSS selector for image container.
+    - `limit` (number, optional, default: 10): Maximum images to return.
+- **Features:**
+  - Prioritizes high-signal image sources and deduplicates URLs.
+  - Returns `primary_url`, `count`, and detected `lazy_load_pattern`.
+- **Read-only:** true
+
+#### ✨ browser_detect_pagination
+
+- **Purpose:**
+  - Detect how pagination works on the current listing page.
+  - Evaluates count-based text, next-button selectors, and URL patterns.
+- **Usage:**
+  - Use this as a first pagination probe before implementing parser pagination logic.
+  - Parameters:
+    - `current_url` (string, required): Current listing URL used for URL-pattern analysis.
+- **Features:**
+  - Returns `strategy`, `confidence`, `details`, and `alternatives_checked`.
+  - Estimates `total_pages` when count/per-page info is available.
+- **Read-only:** true
+
+#### ✨ browser_network_replay
+
+- **Purpose:**
+  - Replay a previously captured network request from browser context (cookies/session intact).
+  - Reuses captured method/headers/body and saves replay response to disk.
+- **Usage:**
+  - Use after `browser_network_search` to quickly re-fetch endpoints without manual fetch scripting.
+  - Parameters:
+    - `url_pattern` (string, required): URL substring or regex to match captured request.
+    - `output_path` (string, required): Absolute file path for response body.
+    - `method` (string, optional): Filter by HTTP method.
+    - `use_captured_headers` (boolean, optional, default: true): Reuse captured headers (filtered).
+    - `is_regex` (boolean, optional, default: false): Treat `url_pattern` as regex.
+- **Read-only:** true
+
+#### ✨ scraper_output_validator
+
+- **Purpose:**
+  - Validate parser output against expected exporter fields from scraper `config.yaml`.
+  - Report missing fields, nil/empty fields, and basic type mismatches.
+- **Usage:**
+  - Run this after `parser_tester` to quickly verify data completeness against configured fields.
+  - Parameters:
+    - `scraper_dir` (string, required): Absolute scraper directory path.
+    - `outputs_json` (string, required): JSON string of parser outputs array.
+- **Read-only:** true
+
 #### ✨ browser_take_screenshot (Enhanced)
 
 - **Purpose:**
@@ -393,10 +483,15 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
     - `job_id` (number, optional): Job ID (default: 12345)
     - `quiet` (boolean, optional): Suppress verbose output (default: true)
     - `auto_download` (boolean, optional): Auto-download content from active browser tab (default: true)
+    - `verify_pages` (boolean, optional): Verify a sample of generated page requests using browser context fetch
+    - `verify_sample_size` (number, optional, default: 3): Number of generated pages to verify when `verify_pages` is enabled
+    - `test_files` (array, optional): Run the parser against multiple content files in one call and produce a cross-file report
 - **Features:**
   - **Multi-format support** - Handles HTML, JSON, and XML content files with auto-detection from file extension
+  - **Batch testing** - Multi-file mode compares nil fields across fixtures in one run
   - **API scraping workflow** - Test parsers that use `JSON.parse(content)` with saved API response files
   - **Network response download** - `auto_download_url` parameter downloads matching captured network responses
+  - **Page verification** - Optionally re-fetches sampled generated pages to validate forged requests
   - Comprehensive file validation (scraper directory, config.yaml, parser files, content files)
   - Intelligent error analysis and troubleshooting guidance
   - Integration with `browser_network_download` and `browser_request` for content acquisition
@@ -823,6 +918,9 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
   - Added coordinate system documentation in screenshot responses
   - Enables AI agents to visually recognize elements and interact with them using `browser_mouse_click_xy`, `browser_mouse_move_xy`, and `browser_mouse_drag_xy` tools
   - Updated tool description to clarify coordinate-based interaction capabilities
+- **parser_tester**: Added multi-file `test_files` mode and generated-page verification (`verify_pages`, `verify_sample_size`)
+  - Runs parser against multiple fixtures in one call and provides cross-file nil-field comparison
+  - Can verify sampled generated page requests using browser context session/cookies
 
 #### Added
 - **datahen_run**: Local DataHen V3 pipeline runner — seed, step (fetch+parse), status, pages, outputs, reset; `save_pages()`/`save_outputs()` behave like real DataHen platform
@@ -830,11 +928,16 @@ This repository is a fork of [Microsoft's Playwright MCP](https://github.com/mic
 - **browser_view_html**: Get page HTML with configurable script inclusion and sanitization
 - **browser_verify_selector**: Verify selector matches and contextually matches expected content
 - **browser_inspect_element**: Reveal selector and DOM tree details of internal references
+- **browser_extract_json_ld**: Extract and parse JSON-LD blocks with optional `@type` filtering and field discovery
+- **browser_count_selector**: Count selector matches with optional expected min/max checks
+- **browser_extract_images**: Extract image URLs from a container with lazy-source detection and deduplication
+- **browser_detect_pagination**: Detect pagination strategy (`count_based`, `next_button`, `url_pattern`) with confidence/details
 - **browser_network_requests_simplified**: Filtered network requests optimized for web scraping (excludes analytics, images, fonts; includes query params and POST bodies)
 - **browser_network_search**: Search/grep across captured network requests (URLs, headers, response bodies) to find API endpoints returning structured data — enables API-based scraping workflows
 - **browser_network_download**: Download a captured network response body to a file — save API JSON/XML responses for offline parser testing
 - **browser_request**: Make HTTP requests from the browser context (inheriting cookies/session) and save responses — replay or forge API calls for testing
-- **parser_tester**: Test DataHen parsers using Ruby parser_tester.rb script — now supports HTML, JSON, and XML content with auto-detection
+- **browser_network_replay**: Replay captured requests with original method/headers/body and save refreshed responses
+- **scraper_output_validator**: Validate parser output against scraper exporter fields from `config.yaml`
 
 #### Modified
 - **browser_download_page**: Disabled in favor of `browser_view_html` for better token management
