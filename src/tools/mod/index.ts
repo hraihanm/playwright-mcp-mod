@@ -23,6 +23,7 @@ import networkSearch from './network_search.js';
 import networkDownload from './network_download.js';
 import networkRequest from './network_request.js';
 import datahenRun from './datahen_run.js';
+import jsonLd from './json_ld.js';
 
 // Re-export all tools as a single array
 export default [
@@ -34,4 +35,5 @@ export default [
   ...networkDownload,
   ...networkRequest,
   ...datahenRun,
+  ...jsonLd,
 ];
