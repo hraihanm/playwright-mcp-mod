@@ -236,6 +236,11 @@ const parserTester = defineTool({
       auto_download: z.boolean().optional().describe('Automatically download content from active browser tab if no content file provided (default: true)'),
       verify_pages: z.boolean().optional().default(false).describe('After parser test, fetch a sample of generated page URLs to verify forged API requests work. Uses browser context (inherits cookies/session).'),
       verify_sample_size: z.number().optional().default(3).describe('Number of pages to sample for verification when verify_pages is true. Default: 3.'),
+      test_files: z.array(z.object({
+        content_file: z.string().describe('Absolute path to content file (JSON/HTML)'),
+        vars: z.string().optional().describe('JSON vars string for this specific file'),
+        label: z.string().optional().describe('Human label for this file, e.g. "product with discount"'),
+      })).optional().describe('Run parser against multiple files in one call. Returns combined report with per-file results and cross-file summary.'),
     }),
     type: 'readOnly',
   },
@@ -257,6 +262,7 @@ const parserTester = defineTool({
       auto_download = true,
       verify_pages = false,
       verify_sample_size = 3,
+      test_files,
     } = params;
 
     // content_file takes precedence over html_file
@@ -394,6 +400,108 @@ parser_tester --scraper "D:\\DataHen\\projects\\playwright-mcp-mod\\scraping\\na
 \`\`\``
           }]
         }
+      };
+    }
+
+    // === Multi-file batch mode ===
+    if (test_files && test_files.length > 0) {
+      const parserTesterPathMulti = findParserTester();
+      if (!parserTesterPathMulti) {
+        return {
+          code: [`// parser_tester multi-file`],
+          captureSnapshot: false,
+          waitForNetwork: false,
+          resultOverride: {
+            content: [{ type: 'text', text: 'ERROR: parser_tester.rb not found.' }],
+          },
+        };
+      }
+
+      interface FileResult {
+        label: string;
+        file: string;
+        exitCode: number;
+        stdout: string;
+        stderr: string;
+        nilFields: string[];
+      }
+
+      const fileResults: FileResult[] = [];
+
+      for (const tf of test_files) {
+        const label = tf.label || path.basename(tf.content_file);
+        const fileContentType = contentTypeFromExtension(tf.content_file);
+        const args = [
+          parserTesterPathMulti,
+          '-s', resolvedScraperDir,
+          '-p', parser_path,
+          '--html', tf.content_file,
+          ...(fileContentType ? ['--content-type', fileContentType] : []),
+          ...(tf.vars ? ['-v', tf.vars] : []),
+          ...(page_type ? ['--page-type', page_type] : []),
+          '--quiet',
+        ];
+
+        try {
+          const res = await new Promise<{ stdout: string; stderr: string; exitCode: number }>((resolve, reject) => {
+            const child = spawn('ruby', args, { cwd: process.cwd(), stdio: ['pipe', 'pipe', 'pipe'] });
+            let stdout = '';
+            let stderr = '';
+            child.stdout?.on('data', (d) => { stdout += d.toString(); });
+            child.stderr?.on('data', (d) => { stderr += d.toString(); });
+            child.on('close', (code) => resolve({ stdout, stderr, exitCode: code ?? -1 }));
+            child.on('error', reject);
+            setTimeout(() => { child.kill(); reject(new Error('Timeout')); }, 60000);
+          });
+
+          // Extract nil fields from output
+          const nilFields: string[] = [];
+          const nilPattern = /^\s*(\w+):\s*(?:nil|null|""|'')\s*$/gm;
+          let m: RegExpExecArray | null;
+          while ((m = nilPattern.exec(res.stdout)) !== null) {
+            nilFields.push(m[1]);
+          }
+
+          fileResults.push({ label, file: tf.content_file, exitCode: res.exitCode, stdout: res.stdout, stderr: res.stderr, nilFields });
+        } catch (e: unknown) {
+          fileResults.push({ label, file: tf.content_file, exitCode: -1, stdout: '', stderr: (e as Error).message, nilFields: [] });
+        }
+      }
+
+      // Build cross-file nil comparison
+      const allNilSets = fileResults.map(r => new Set(r.nilFields));
+      const allNilFields = new Set(fileResults.flatMap(r => r.nilFields));
+      const alwaysNil: string[] = [];
+      const sometimesNil: string[] = [];
+      for (const field of allNilFields) {
+        const nilCount = allNilSets.filter(s => s.has(field)).length;
+        if (nilCount === fileResults.length) alwaysNil.push(field);
+        else sometimesNil.push(field);
+      }
+
+      const lines: string[] = ['## Multi-file Parser Test Results', ''];
+      for (const r of fileResults) {
+        const icon = r.exitCode === 0 ? '\u2705' : '\u274C';
+        lines.push(`${icon} **${r.label}** (exit: ${r.exitCode})`);
+        if (r.nilFields.length > 0) lines.push(`   nil fields: ${r.nilFields.join(', ')}`);
+        if (r.exitCode !== 0 && r.stderr) lines.push(`   error: ${r.stderr.substring(0, 200)}`);
+      }
+
+      lines.push('');
+      lines.push('### Cross-file Summary');
+      lines.push(`Files tested: ${fileResults.length}`);
+      lines.push(`Passed: ${fileResults.filter(r => r.exitCode === 0).length}`);
+      if (alwaysNil.length > 0) lines.push(`Always nil (${alwaysNil.length}): ${alwaysNil.join(', ')}`);
+      if (sometimesNil.length > 0) lines.push(`Sometimes nil (${sometimesNil.length}): ${sometimesNil.join(', ')}`);
+      if (alwaysNil.length === 0 && sometimesNil.length === 0) lines.push('No nil fields detected across any file.');
+
+      return {
+        code: [`// parser_tester multi-file (${test_files.length} files)`],
+        captureSnapshot: false,
+        waitForNetwork: false,
+        resultOverride: {
+          content: [{ type: 'text', text: lines.join('\n') }],
+        },
       };
     }
 
